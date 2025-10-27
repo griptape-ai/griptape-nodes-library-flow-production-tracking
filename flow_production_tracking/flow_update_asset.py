@@ -37,12 +37,14 @@ class FlowUpdateAsset(BaseShotGridNode):
                     tooltip="The ID of the asset to update.",
                 )
             )
+            # Note: Assets in ShotGrid don't have names, only codes
+            # This parameter is kept for backward compatibility but will be ignored
             self.add_parameter(
                 Parameter(
                     name="asset_name",
                     type="string",
                     default_value=None,
-                    tooltip="The new name for the asset (optional).",
+                    tooltip="The new name for the asset (optional). Note: Assets in ShotGrid only have codes, not names, so this field will be ignored.",
                 )
             )
             self.add_parameter(
@@ -438,9 +440,12 @@ class FlowUpdateAsset(BaseShotGridNode):
             update_data = {}
             has_updates = False
 
+            # Note: Assets in ShotGrid don't have names, only codes
+            # The asset_name parameter is ignored for backward compatibility
             if asset_name is not None:
-                update_data["name"] = asset_name
-                has_updates = True
+                logger.warning(
+                    f"{self.name}: asset_name parameter is ignored - assets in ShotGrid only have codes, not names"
+                )
 
             if asset_code is not None:
                 update_data["code"] = asset_code

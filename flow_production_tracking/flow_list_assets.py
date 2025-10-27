@@ -112,13 +112,6 @@ class FlowListAssets(BaseShotGridNode):
                 ui_options={"hide_property": True},
             )
             Parameter(
-                name="selected_project_id",
-                type="str",
-                default_value="",
-                allowed_modes={ParameterMode.OUTPUT},
-                tooltip="ID of the project that assets were loaded from",
-            )
-            Parameter(
                 name="assets",
                 output_type="json",
                 type="json",
@@ -289,10 +282,7 @@ class FlowListAssets(BaseShotGridNode):
 
         # Output the assets and project_id
         self.parameter_output_values["assets"] = asset_list
-        # Set the project_id output so other nodes can use it
         project_id = self.get_parameter_value("project_id")
-        self.parameter_output_values["selected_project_id"] = project_id
-        self.publish_update_to_parameter("selected_project_id", project_id)
         logger.info(f"{self.name}: Retrieved {len(asset_list)} assets for project {project_id}")
 
         return choices_args, choices_names
