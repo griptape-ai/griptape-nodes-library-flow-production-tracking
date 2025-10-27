@@ -543,15 +543,16 @@ class FlowCreateProject(BaseShotGridNode):
                 # Convert project name to a valid code format
                 # Remove special characters, convert to lowercase, replace spaces with underscores
                 import re
-                project_code = re.sub(r'[^a-zA-Z0-9\s]', '', project_name)  # Remove special chars
-                project_code = re.sub(r'\s+', '_', project_code)  # Replace spaces with underscores
+
+                project_code = re.sub(r"[^a-zA-Z0-9\s]", "", project_name)  # Remove special chars
+                project_code = re.sub(r"\s+", "_", project_code)  # Replace spaces with underscores
                 project_code = project_code.lower()  # Convert to lowercase
                 project_code = project_code[:20]  # Limit length to 20 characters
-                
+
                 # Ensure it's not empty after processing
                 if not project_code:
                     project_code = "project"
-                
+
                 logger.info(f"{self.name}: Auto-generated project code: {project_code}")
             else:
                 logger.info(f"{self.name}: Using provided project code: {project_code}")
