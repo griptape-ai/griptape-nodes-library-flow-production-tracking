@@ -227,13 +227,26 @@ class FlowUpdateProject(BaseShotGridNode):
         try:
             # Step 1: Download the image from the URL
             logger.info(f"{self.name}: Downloading image from URL")
-            thumbnail_url = thumbnail_image.value
+
+            # Handle both object with .value attribute and dictionary
+            if hasattr(thumbnail_image, "value"):
+                thumbnail_url = thumbnail_image.value
+            elif isinstance(thumbnail_image, dict):
+                thumbnail_url = thumbnail_image.get("value") or thumbnail_image.get("url")
+            else:
+                thumbnail_url = str(thumbnail_image)
+
+            if not thumbnail_url:
+                raise ValueError("No valid URL found in thumbnail_image parameter")
+
             image_bytes = self._download_image_from_url(thumbnail_url)
 
             # Step 2: Determine filename and MIME type
             # Extract filename from URL or generate one
             if hasattr(thumbnail_image, "name") and thumbnail_image.name:
                 filename = thumbnail_image.name
+            elif isinstance(thumbnail_image, dict) and thumbnail_image.get("name"):
+                filename = thumbnail_image.get("name")
             else:
                 # Generate filename from URL
                 url_path = thumbnail_url.split("/")[-1]
@@ -379,9 +392,12 @@ class FlowUpdateProject(BaseShotGridNode):
 
                             # Update the ParameterMessage to show the specific project
                             message_param = self.get_element_by_name_and_type("project_message", ParameterMessage)
-                            message_param.button_text = f"View Project (ID: {value})"
-                            message_param.button_link = full_url
-                            message_param.value = f"Update project ID {value}. Click the button to view it in ShotGrid."
+                            if message_param and isinstance(message_param, ParameterMessage):
+                                message_param.button_text = f"View Project (ID: {value})"
+                                message_param.button_link = full_url
+                                message_param.value = (
+                                    f"Update project ID {value}. Click the button to view it in ShotGrid."
+                                )
 
                             logger.info(f"{self.name}: Updated project message to show project {value}")
                         else:
@@ -421,6 +437,7 @@ class FlowUpdateProject(BaseShotGridNode):
             # Prepare update data for basic project fields
             update_data = {}
             has_basic_updates = False
+            updated_project = None
 
             if project_name is not None:
                 update_data["name"] = project_name
@@ -438,16 +455,6 @@ class FlowUpdateProject(BaseShotGridNode):
             if has_basic_updates:
                 logger.info(f"{self.name}: Updating basic project fields")
                 try:
-                    # Try password authentication first for better permissions
-                    try:
-                        access_token = self._get_access_token_with_password()
-                        logger.info(f"{self.name}: Using password authentication")
-                    except Exception as e:
-                        logger.warning(
-                            f"{self.name}: Password authentication failed, falling back to client credentials: {e}"
-                        )
-                        access_token = self._get_access_token()
-
                     update_url = f"{base_url}api/v1/entity/projects/{project_id}"
                     headers = {
                         "Authorization": f"Bearer {access_token}",

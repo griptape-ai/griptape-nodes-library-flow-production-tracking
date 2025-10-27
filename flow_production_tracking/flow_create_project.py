@@ -40,7 +40,7 @@ class FlowCreateProject(BaseShotGridNode):
                     name="project_code",
                     type="string",
                     default_value=None,
-                    tooltip="The code for the project to create.",
+                    tooltip="The code for the project to create. If not provided, will be auto-generated from the project name.",
                 )
             )
             self.add_parameter(
@@ -254,7 +254,16 @@ class FlowCreateProject(BaseShotGridNode):
             # Step 1: Download the image from the URL
             logger.info(f"{self.name}: Downloading image from URL")
 
-            thumbnail_url = thumbnail_image.value
+            # Handle both object with .value attribute and dictionary
+            if hasattr(thumbnail_image, "value"):
+                thumbnail_url = thumbnail_image.value
+            elif isinstance(thumbnail_image, dict):
+                thumbnail_url = thumbnail_image.get("value") or thumbnail_image.get("url")
+            else:
+                thumbnail_url = str(thumbnail_image)
+
+            if not thumbnail_url:
+                raise ValueError("No valid URL found in thumbnail_image parameter")
 
             image_bytes = self._download_image_from_url(thumbnail_url)
 
@@ -262,6 +271,8 @@ class FlowCreateProject(BaseShotGridNode):
             # Extract filename from URL or generate one
             if hasattr(thumbnail_image, "name") and thumbnail_image.name:
                 filename = thumbnail_image.name
+            elif isinstance(thumbnail_image, dict) and thumbnail_image.get("name"):
+                filename = thumbnail_image.get("name")
             else:
                 # Generate filename from URL
                 url_path = thumbnail_url.split("/")[-1]
@@ -466,15 +477,12 @@ class FlowCreateProject(BaseShotGridNode):
                 project_data = {
                     "name": project_name,
                     "code": project_code,
-                    "template": False,  # Ensure the new project is not a template
+                    "layout_project": {"type": "Project", "id": template_id},
                 }
 
-                # Copy relevant fields from template (only safe fields that we know work)
-                safe_fields = ["sg_description", "sg_type", "sg_status"]
-
-                for field in safe_fields:
-                    if template_attributes.get(field) is not None:
-                        project_data[field] = template_attributes.get(field)
+                # Copy only the description field from template (other fields might cause issues)
+                if template_attributes.get("sg_description"):
+                    project_data["sg_description"] = template_attributes.get("sg_description")
 
                 # Override description if provided
                 if project_description:
@@ -498,6 +506,12 @@ class FlowCreateProject(BaseShotGridNode):
                     try:
                         error_data = create_response.json()
                         logger.error(f"{self.name}: Error response: {error_data}")
+                        # Log each error individually for better debugging
+                        if "errors" in error_data:
+                            for error in error_data["errors"]:
+                                logger.error(
+                                    f"{self.name}: Error - {error.get('title', 'Unknown error')}: {error.get('detail', 'No details')}"
+                                )
                     except:
                         logger.error(f"{self.name}: Error response text: {create_response.text}")
                     create_response.raise_for_status()
@@ -524,21 +538,27 @@ class FlowCreateProject(BaseShotGridNode):
                 logger.error(f"{self.name}: project_name is required")
                 return
 
+            # Auto-generate project code from name if not provided
             if not project_code:
-                logger.error(f"{self.name}: project_code is required")
-                return
+                # Convert project name to a valid code format
+                # Remove special characters, convert to lowercase, replace spaces with underscores
+                import re
+                project_code = re.sub(r'[^a-zA-Z0-9\s]', '', project_name)  # Remove special chars
+                project_code = re.sub(r'\s+', '_', project_code)  # Replace spaces with underscores
+                project_code = project_code.lower()  # Convert to lowercase
+                project_code = project_code[:20]  # Limit length to 20 characters
+                
+                # Ensure it's not empty after processing
+                if not project_code:
+                    project_code = "project"
+                
+                logger.info(f"{self.name}: Auto-generated project code: {project_code}")
+            else:
+                logger.info(f"{self.name}: Using provided project code: {project_code}")
 
             # Get access token and base URL
             access_token = self._get_access_token()
             base_url = self._get_shotgrid_config()["base_url"]
-
-            # Try password authentication first for better permissions
-            try:
-                access_token = self._get_access_token_with_password()
-                logger.info(f"{self.name}: Using password authentication")
-            except Exception as e:
-                logger.warning(f"{self.name}: Password authentication failed, falling back to client credentials: {e}")
-                access_token = self._get_access_token()
 
             # Create the project (with or without template)
             if use_template:
@@ -619,7 +639,23 @@ class FlowCreateProject(BaseShotGridNode):
 
                         with httpx.Client() as client:
                             response = client.post(url, headers=headers, json=project_data)
-                            response.raise_for_status()
+
+                            # Log detailed error information if creation fails
+                            if response.status_code != 201:
+                                logger.error(
+                                    f"{self.name}: Fallback project creation failed with status {response.status_code}"
+                                )
+                                try:
+                                    error_data = response.json()
+                                    logger.error(f"{self.name}: Error response: {error_data}")
+                                    if "errors" in error_data:
+                                        for error in error_data["errors"]:
+                                            logger.error(
+                                                f"{self.name}: Error - {error.get('title', 'Unknown error')}: {error.get('detail', 'No details')}"
+                                            )
+                                except:
+                                    logger.error(f"{self.name}: Error response text: {response.text}")
+                                response.raise_for_status()
 
                             data = response.json()
                             created_project = data.get("data", {})
@@ -645,7 +681,21 @@ class FlowCreateProject(BaseShotGridNode):
 
                     with httpx.Client() as client:
                         response = client.post(url, headers=headers, json=project_data)
-                        response.raise_for_status()
+
+                        # Log detailed error information if creation fails
+                        if response.status_code != 201:
+                            logger.error(f"{self.name}: Project creation failed with status {response.status_code}")
+                            try:
+                                error_data = response.json()
+                                logger.error(f"{self.name}: Error response: {error_data}")
+                                if "errors" in error_data:
+                                    for error in error_data["errors"]:
+                                        logger.error(
+                                            f"{self.name}: Error - {error.get('title', 'Unknown error')}: {error.get('detail', 'No details')}"
+                                        )
+                            except:
+                                logger.error(f"{self.name}: Error response text: {response.text}")
+                            response.raise_for_status()
 
                         data = response.json()
                         created_project = data.get("data", {})
@@ -671,7 +721,21 @@ class FlowCreateProject(BaseShotGridNode):
 
                 with httpx.Client() as client:
                     response = client.post(url, headers=headers, json=project_data)
-                    response.raise_for_status()
+
+                    # Log detailed error information if creation fails
+                    if response.status_code != 201:
+                        logger.error(f"{self.name}: Project creation failed with status {response.status_code}")
+                        try:
+                            error_data = response.json()
+                            logger.error(f"{self.name}: Error response: {error_data}")
+                            if "errors" in error_data:
+                                for error in error_data["errors"]:
+                                    logger.error(
+                                        f"{self.name}: Error - {error.get('title', 'Unknown error')}: {error.get('detail', 'No details')}"
+                                    )
+                        except:
+                            logger.error(f"{self.name}: Error response text: {response.text}")
+                        response.raise_for_status()
 
                     data = response.json()
                     created_project = data.get("data", {})

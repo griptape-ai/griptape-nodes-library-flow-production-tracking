@@ -4,13 +4,26 @@
   "settings": [
     {
       "description": "Configuration settings for Flow Production Tracking",
-      "category": "nodes.Autodesk",
+      "category": "Autodesk",
       "contents": {
-        "SHOTGRID_API_KEY": "$SHOTGRID_API_KEY",
-        "SHOTGRID_SCRIPT_NAME": "$SHOTGRID_SCRIPT_NAME",
-        "SHOTGRID_URL": "$SHOTGRID_URL",
-        "SHOTGRID_USERNAME": "$SHOTGRID_USERNAME",
-        "SHOTGRID_PASSWORD": "$SHOTGRID_PASSWORD",
+        "secrets_to_register": [
+          "SHOTGRID_API_KEY",
+          "SHOTGRID_SCRIPT_NAME",
+          "SHOTGRID_URL"
+        ]
+      }
+    },
+    {
+      "description": "Authentication method for Flow Production Tracking",
+      "category": "flow_production_tracking",
+      "contents": {
+        "auth": "API"
+      },
+      "schema": {
+        "auth": {
+          "type": "string",
+          "enum": ["API", "user"]
+        }
       }
     }
   ],
@@ -25,7 +38,7 @@
         "httpx",
         "Pillow"
       ]
-  }
+    }
 
   },
   "categories": [

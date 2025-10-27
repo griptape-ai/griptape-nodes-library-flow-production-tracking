@@ -1,7 +1,14 @@
 from typing import Any
 
-from griptape_nodes.exe_types.core_types import NodeMessageResult, Parameter, ParameterGroup, ParameterMessage
+from griptape_nodes.exe_types.core_types import (
+    NodeMessageResult,
+    Parameter,
+    ParameterGroup,
+    ParameterMessage,
+    ParameterMode,
+)
 from griptape_nodes.exe_types.node_types import ControlNode
+from griptape_nodes.retained_mode.griptape_nodes import GriptapeNodes
 from griptape_nodes.traits.button import Button, ButtonDetailsMessagePayload, OnClickMessageResultPayload
 
 
@@ -12,22 +19,19 @@ class AutodeskFlowConfiguration(ControlNode):
         super().__init__(**kwargs)
 
         # Step 1: ShotGrid URL
-        with ParameterGroup(
-            name="Step_1_Autodesk_Flow_URL", ui_options={"display_name": "Step 1: Autodesk Flow URL"}
-        ) as url_group:
+        with ParameterGroup(name="Step_1_Autodesk_Flow_URL") as url_group:
             ParameterMessage(
+                variant="none",
                 name="step1_message",
-                title="Set Your Autodesk Flow URL",
                 value="Enter your Autodesk Flow Production Tracking instance URL. \nThis is typically in the format: https://your-company.shotgrid.autodesk.com/",
                 button_link="",
                 button_text="",
-                variant="info",
             )
 
             Parameter(
                 name="shotgrid_url",
                 type="string",
-                default_value=self.get_config_value(service="Autodesk", value="SHOTGRID_URL") or "",
+                default_value=GriptapeNodes.SecretsManager().get_secret("SHOTGRID_URL") or "",
                 tooltip="Your ShotGrid instance URL (e.g., https://your-company.shotgrid.autodesk.com/)",
                 ui_options={
                     "display_name": "ShotGrid URL",
@@ -38,27 +42,24 @@ class AutodeskFlowConfiguration(ControlNode):
         self.add_node_element(url_group)
 
         # Step 2: Script Name
-        with ParameterGroup(
-            name="Step_2_Script Name", ui_options={"display_name": "Step 2: Script Name"}
-        ) as script_group:
+        with ParameterGroup(name="Step_2_Script Name") as script_group:
             ParameterMessage(
                 name="step2_message",
-                title="Configure Script Name",
-                value="Set the name of your ShotGrid script. \nThis should match the script name you created in ShotGrid Admin > Scripts.",
+                value="Set the name of your ShotGrid script. \nThis should match the script name you created in ShotGrid Admin > Scripts.\n\nIf you haven't created a script yet, you need to:\n1. Go to ShotGrid Admin > Scripts\n2. Create a new script with the name you want to use\n3. Copy the script key (API key) for use in Step 3",
                 button_link="https://help.autodesk.com/view/SGDEV/ENU/?guid=SGD_py_python_api_create_manage_html",
                 button_text="View Flow Documentation",
-                variant="info",
+                button_icon="book",
+                variant="none",
             )
 
             Parameter(
                 name="script_name",
                 type="string",
-                default_value=self.get_config_value(service="Autodesk", value="SHOTGRID_SCRIPT_NAME")
-                or "Griptape Nodes",
+                default_value=GriptapeNodes.SecretsManager().get_secret("SHOTGRID_SCRIPT_NAME") or "gtn",
                 tooltip="Name of the script (should match the script name in ShotGrid)",
                 ui_options={
                     "display_name": "Script Name",
-                    "placeholder": "Griptape Nodes",
+                    "placeholder": "gtn",
                 },
             )
 
@@ -68,11 +69,11 @@ class AutodeskFlowConfiguration(ControlNode):
         with ParameterGroup(name="Step_3_API_Key") as api_key_group:
             ParameterMessage(
                 name="step3_message",
-                title="Step 3: Set Your API Key",
-                value="Configure your ShotGrid API Key (Script Key) in the settings.\nIf you don't have one, you can create one in ShotGrid Admin > Scripts,\nor ask your administrator for one.",
+                value="Configure your ShotGrid API Key (Script Key) in the settings.\n\nIf you don't have one, you can create one in ShotGrid Admin > Scripts,\nor ask your administrator for one.\n\nClick the link and paste the API key into the field.",
                 button_link="#settings-secrets?filter=SHOTGRID_API_KEY",
                 button_text="Open Settings",
-                variant="info",
+                button_icon="key",
+                variant="none",
             )
         self.add_node_element(api_key_group)
 
@@ -80,20 +81,10 @@ class AutodeskFlowConfiguration(ControlNode):
             # Step 4: Check Configuration
             ParameterMessage(
                 name="step4_message",
-                title="Step 4: Test Your Configuration",
                 value="Click the button below to test your ShotGrid configuration and verify everything is working correctly.",
-                button_link="",
-                button_text="",
-                variant="info",
-            )
-
-            # Check configuration button
-            Parameter(
-                name="configuration_status",
-                type="string",
-                default_value="",
-                tooltip="Test your ShotGrid configuration",
-                ui_options={"multiline": True, "is_full_width": True, "placeholder_text": "Configuration status..."},
+                button_text="Check Configuration",
+                variant="none",
+                button_icon="check-circle",
                 traits={
                     Button(
                         label="Check Configuration",
@@ -103,25 +94,35 @@ class AutodeskFlowConfiguration(ControlNode):
                     )
                 },
             )
+
+            # Check configuration button
+            Parameter(
+                name="configuration_status",
+                type="str",
+                default_value="",
+                tooltip="Test your ShotGrid configuration",
+                allowed_modes={ParameterMode.PROPERTY, ParameterMode.OUTPUT},
+                ui_options={"multiline": True, "is_full_width": True, "placeholder_text": "Configuration status..."},
+            )
         self.add_node_element(check_config_group)
 
     def after_value_set(self, parameter: Parameter, value: Any) -> None:
         """Automatically set config values when parameters are changed."""
         if parameter.name == "shotgrid_url":
-            self.set_config_value(service="Autodesk", value="SHOTGRID_URL", new_value=value)
+            GriptapeNodes.SecretsManager().set_secret("SHOTGRID_URL", value)
         elif parameter.name == "script_name":
-            self.set_config_value(service="Autodesk", value="SHOTGRID_SCRIPT_NAME", new_value=value)
+            GriptapeNodes.SecretsManager().set_secret("SHOTGRID_SCRIPT_NAME", value)
 
         return super().after_value_set(parameter, value)
 
-    def _check_configuration(self, button: Button, button_details: ButtonDetailsMessagePayload) -> NodeMessageResult:
+    def _check_configuration(self, button: Button, button_details: ButtonDetailsMessagePayload) -> NodeMessageResult:  # noqa: ARG002
         """Check the ShotGrid configuration when button is clicked."""
         # Get configuration from parameters
         shotgrid_url = self.get_parameter_value("shotgrid_url")
         script_name = self.get_parameter_value("script_name")
 
-        # Get API key from environment variables
-        api_key = self.get_config_value(service="Autodesk", value="SHOTGRID_API_KEY")
+        # Get API key from secrets manager
+        api_key = GriptapeNodes.SecretsManager().get_secret("SHOTGRID_API_KEY")
 
         # Validate required fields
         if not shotgrid_url or not api_key:
@@ -145,15 +146,45 @@ class AutodeskFlowConfiguration(ControlNode):
         try:
             import httpx
 
-            test_url = f"{shotgrid_url}api/v1/auth/access_token"
-            test_data = {
+            # ShotGrid uses OAuth2 client credentials flow
+            # First, get an access token
+            auth_url = f"{shotgrid_url}api/v1/auth/access_token"
+            auth_data = {
                 "grant_type": "client_credentials",
                 "client_id": script_name,
                 "client_secret": api_key,
             }
-            test_headers = {"Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json"}
+            auth_headers = {"Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json"}
 
-            response = httpx.post(test_url, data=test_data, headers=test_headers, timeout=10)
+            auth_response = httpx.post(auth_url, data=auth_data, headers=auth_headers, timeout=10)
+
+            # Check for authentication errors
+            if auth_response.status_code == 400:
+                try:
+                    error_data = auth_response.json()
+                    if "errors" in error_data and len(error_data["errors"]) > 0:
+                        error = error_data["errors"][0]
+                        if "Can't authenticate script" in error.get("title", ""):
+                            raise Exception(
+                                f"Script '{script_name}' not found or not properly configured in ShotGrid. Please check:\n• Script name is correct\n• Script is created in ShotGrid Admin > Scripts\n• API key matches the script key in ShotGrid"
+                            )
+                        raise Exception(f"Authentication error: {error.get('title', 'Unknown error')}")
+                except Exception:
+                    # If we can't parse the error, use the original response
+                    auth_response.raise_for_status()
+
+            auth_response.raise_for_status()
+
+            # Extract the access token
+            auth_result = auth_response.json()
+            access_token = auth_result["access_token"]
+
+            # Now test with a simple API call using the access token
+            test_url = f"{shotgrid_url}api/v1/entity/Project"
+            test_params = {"fields": ["id", "name"], "limit": 1}
+            test_headers = {"Accept": "application/json", "Authorization": f"Bearer {access_token}"}
+
+            response = httpx.get(test_url, params=test_params, headers=test_headers, timeout=10)
             response.raise_for_status()
 
             # Configuration is valid

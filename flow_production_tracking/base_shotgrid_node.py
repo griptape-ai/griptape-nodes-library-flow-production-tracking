@@ -3,7 +3,7 @@ import time
 import httpx
 
 from griptape_nodes.exe_types.node_types import ControlNode
-from griptape_nodes.retained_mode.griptape_nodes import logger
+from griptape_nodes.retained_mode.griptape_nodes import GriptapeNodes, logger
 
 
 class BaseShotGridNode(ControlNode):
@@ -39,7 +39,7 @@ class BaseShotGridNode(ControlNode):
             raise ValueError(error_msg)
 
         # Get script name from config
-        script_name = self.get_config_value(service=self.SERVICE, value=self.SCRIPT_NAME_ENV_VAR) or "Griptape Nodes"
+        script_name = GriptapeNodes.SecretsManager().get_secret(self.SCRIPT_NAME_ENV_VAR) or "Griptape Nodes"
 
         # Get a new token using client credentials
         auth_url = f"{base_url}api/v1/auth/access_token"
@@ -74,9 +74,9 @@ class BaseShotGridNode(ControlNode):
 
     def _get_shotgrid_config(self) -> dict:
         """Get ShotGrid configuration values."""
-        api_key = self.get_config_value(service=self.SERVICE, value=self.API_KEY_ENV_VAR)
-        base_url = self.get_config_value(service=self.SERVICE, value=self.SHOTGRID_URL_ENV_VAR)
-        script_name = self.get_config_value(service=self.SERVICE, value=self.SCRIPT_NAME_ENV_VAR) or "Griptape Nodes"
+        api_key = GriptapeNodes.SecretsManager().get_secret(self.API_KEY_ENV_VAR)
+        base_url = GriptapeNodes.SecretsManager().get_secret(self.SHOTGRID_URL_ENV_VAR)
+        script_name = GriptapeNodes.SecretsManager().get_secret(self.SCRIPT_NAME_ENV_VAR) or "Griptape Nodes"
 
         if not base_url.endswith("/"):
             base_url += "/"
