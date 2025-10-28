@@ -268,6 +268,7 @@ for entity_type in entity_types:
 Tasks have rich data available including:
 
 **Core Information:**
+
 - `content`: Task name/description
 - `sg_status_list`: Status (wtg, ip, fin, etc.)
 - `sg_sort_order`: Display order
@@ -275,6 +276,7 @@ Tasks have rich data available including:
 - `sg_priority_1`: Priority level
 
 **Relationships:**
+
 - `entity`: The entity this task belongs to (Asset, Shot, etc.)
 - `project`: The project this task belongs to
 - `step`: The pipeline step
@@ -285,6 +287,7 @@ Tasks have rich data available including:
 - `sibling_tasks`: Other tasks for the same entity
 
 **Time Tracking:**
+
 - `duration`: Task duration
 - `est_in_mins`: Estimated time in minutes
 - `time_logs_sum`: Total time logged
@@ -366,6 +369,281 @@ result = create_response.json()
 print(f"Created with ID: {result.get('data', {}).get('id')}")
 ```
 
+## 🔧 **UI/UX Parameter Management Patterns:**
+
+### **Selection Persistence in Dynamic Dropdowns**
+
+When building nodes with dynamic dropdown choices (like project lists, asset lists), selection persistence is critical:
+
+```python
+def _reload_choices(self, preserve_selection=True):
+    """Reload choices while preserving user selection."""
+    if preserve_selection:
+        # Store current selection before reload
+        current_selection = self.get_parameter_value("parameter_name")
+        
+        # Reload the choices
+        new_choices = self._fetch_choices()
+        
+        # Find and restore the selection
+        if current_selection and current_selection in new_choices:
+            selected_value = current_selection
+        else:
+            selected_value = new_choices[0] if new_choices else None
+            
+        self._update_option_choices("parameter_name", new_choices, selected_value)
+    else:
+        # Always select first item (e.g., when project changes)
+        new_choices = self._fetch_choices()
+        self._update_option_choices("parameter_name", new_choices, new_choices[0])
+```
+
+### **Parameter Value Preservation in after_value_set**
+
+When `after_value_set` triggers dropdown updates, always preserve the current selection:
+
+```python
+def after_value_set(self, parameter: Parameter, value: Any) -> None:
+    if parameter.name == "project_id" and value:
+        # Get current selection before updating
+        current_selection = self.get_parameter_value("asset_type")
+        
+        # Update choices
+        new_choices = self._get_choices_for_project(value)
+        
+        # Preserve selection if still valid
+        if current_selection and current_selection in new_choices:
+            selected_value = current_selection
+        else:
+            selected_value = new_choices[0] if new_choices else None
+            
+        self._update_option_choices("asset_type", new_choices, selected_value)
+```
+
+### **Output Parameter Population Patterns**
+
+For nodes that display selected data, use consistent output parameter patterns:
+
+```python
+def _update_selected_data(self, selected_item):
+    """Update all output parameters with selected item data."""
+    if not selected_item:
+        # Clear all outputs
+        self.set_parameter_value("item_id", "")
+        self.set_parameter_value("item_data", {})
+        self.set_parameter_value("item_url", "")
+        self.set_parameter_value("item_description", "")
+        return
+    
+    # Populate outputs
+    item_id = selected_item.get("id", "")
+    self.set_parameter_value("item_id", str(item_id))
+    self.set_parameter_value("item_data", selected_item)
+    
+    # Generate web UI URL
+    base_url = self._get_shotgrid_config()["base_url"]
+    item_url = f"{base_url.rstrip('/')}/detail/EntityType/{item_id}"
+    self.set_parameter_value("item_url", item_url)
+    
+    # Extract description
+    attributes = selected_item.get("attributes", {})
+    description = attributes.get("description", "") or attributes.get("sg_description", "")
+    self.set_parameter_value("item_description", description)
+    
+    # Publish updates
+    self.publish_update_to_parameter("item_id", str(item_id))
+    self.publish_update_to_parameter("item_data", selected_item)
+    self.publish_update_to_parameter("item_url", item_url)
+    self.publish_update_to_parameter("item_description", description)
+```
+
+## 🔧 **ShotGrid URL Pattern Consistency:**
+
+### **Web UI URL Generation**
+
+ShotGrid REST API returns API URLs, but users need web UI URLs. Use consistent patterns:
+
+```python
+def _generate_web_url(self, entity_type: str, entity_id: int) -> str:
+    """Generate ShotGrid web UI URL from entity type and ID."""
+    try:
+        base_url = self._get_shotgrid_config()["base_url"]
+        return f"{base_url.rstrip('/')}/detail/{entity_type}/{entity_id}"
+    except Exception:
+        # Fallback to generic ShotGrid URL
+        return f"https://shotgrid.autodesk.com/detail/{entity_type}/{entity_id}"
+
+# Examples:
+# /detail/Project/264
+# /detail/Asset/2204  
+# /detail/Task/6817
+```
+
+### **API vs Web URL Conversion**
+
+When ShotGrid API provides a `self` link, convert it to web URL:
+
+```python
+def _convert_api_url_to_web_url(self, api_url: str, entity_type: str, entity_id: int) -> str:
+    """Convert ShotGrid API URL to web UI URL."""
+    if api_url and f"/api/v1/entity/{entity_type.lower()}s/" in api_url:
+        # Extract path and convert to web format
+        path = api_url.replace(f"/api/v1/entity/{entity_type.lower()}s/", f"/{entity_type.lower()}s/")
+        base_url = self._get_shotgrid_config()["base_url"]
+        return f"{base_url.rstrip('/')}{path}"
+    else:
+        # Fallback to direct URL generation
+        return self._generate_web_url(entity_type, entity_id)
+```
+
+## 🔧 **Parameter Message vs Output Parameter Patterns:**
+
+### **When to Use ParameterMessage vs Output Parameters**
+
+**Use ParameterMessage for:**
+
+- Temporary status updates during processing
+- Interactive buttons that trigger actions
+- Non-persistent information display
+
+**Use Output Parameters for:**
+
+- Data that other nodes need to consume
+- Persistent information that should be available after processing
+- URLs, IDs, and structured data
+
+### **Migration from ParameterMessage to Output Parameters**
+
+```python
+# OLD: ParameterMessage approach
+self.project_message = ParameterMessage(
+    name="project_message",
+    message="Select a project to view details",
+    button_text="View Project",
+    button_link=""
+)
+
+# NEW: Output parameter approach
+self.add_parameter(
+    Parameter(
+        name="project_url",
+        type="string", 
+        default_value="",
+        tooltip="The URL to view the project in ShotGrid",
+        allowed_modes={ParameterMode.OUTPUT}
+    )
+)
+```
+
+## 🔧 **JSON Path Extraction Patterns:**
+
+### **Root Array Indexing**
+
+When extracting values from JSON arrays, handle root-level indexing:
+
+```python
+def extract_value_from_path(data, path):
+    """Extract value from JSON data using dot notation path."""
+    parts = path.split('.')
+    current = data
+    
+    for part in parts:
+        # Handle array indexing: [0], [1], etc.
+        if part.startswith('[') and part.endswith(']'):
+            index = int(part[1:-1])
+            if isinstance(current, list) and 0 <= index < len(current):
+                current = current[index]
+            else:
+                return None
+        # Handle key[0] pattern: items[0]
+        elif '[' in part and ']' in part:
+            key, index_part = part.split('[', 1)
+            index = int(index_part.rstrip(']'))
+            if isinstance(current, dict) and key in current:
+                if isinstance(current[key], list) and 0 <= index < len(current[key]):
+                    current = current[key][index]
+                else:
+                    return None
+            else:
+                return None
+        # Handle regular key access
+        else:
+            if isinstance(current, dict) and part in current:
+                current = current[part]
+            else:
+                return None
+    
+    return current
+
+# Examples:
+# "[0]" -> data[0]
+# "[0].id" -> data[0]["id"] 
+# "items[0]" -> data["items"][0]
+# "items[0].name" -> data["items"][0]["name"]
+```
+
+## 🔧 **Error Handling and User Experience:**
+
+### **Graceful Fallbacks for Missing Data**
+
+Always provide fallbacks for missing or invalid data:
+
+```python
+def _safe_get_description(self, item_data):
+    """Safely extract description with multiple fallbacks."""
+    attributes = item_data.get("attributes", {})
+    
+    # Try multiple description fields
+    description = (
+        attributes.get("description") or
+        attributes.get("sg_description") or 
+        attributes.get("name") or
+        ""
+    )
+    
+    return description.strip() if description else "No description available"
+```
+
+### **Image Handling with Fallbacks**
+
+```python
+def _create_fallback_image(self, text: str, width: int = 200, height: int = 150):
+    """Create a fallback image when the original is unavailable."""
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+        
+        # Create image
+        img = Image.new('RGB', (width, height), color='#404040')
+        draw = ImageDraw.Draw(img)
+        
+        # Try to use a font, fallback to default
+        try:
+            font = ImageFont.truetype("/System/Library/Fonts/Arial.ttf", 16)
+        except:
+            font = ImageFont.load_default()
+        
+        # Center text
+        bbox = draw.textbbox((0, 0), text, font=font)
+        text_width = bbox[2] - bbox[0]
+        text_height = bbox[3] - bbox[1]
+        x = (width - text_width) // 2
+        y = (height - text_height) // 2
+        
+        draw.text((x, y), text, fill='white', font=font)
+        
+        # Convert to base64
+        import io
+        import base64
+        buffer = io.BytesIO()
+        img.save(buffer, format='PNG')
+        img_data = base64.b64encode(buffer.getvalue()).decode()
+        return f"data:image/png;base64,{img_data}"
+        
+    except Exception as e:
+        logger.warning(f"Failed to create fallback image: {e}")
+        return None
+```
+
 ## 🎯 **Success Criteria:**
 
 - [ ] API calls work with curl/httpx
@@ -373,6 +651,10 @@ print(f"Created with ID: {result.get('data', {}).get('id')}")
 - [ ] Feature works in isolation
 - [ ] Node implementation follows the "right way"
 - [ ] Feature works reliably in the node
+- [ ] UI/UX patterns are consistent and user-friendly
+- [ ] Selection persistence works correctly
+- [ ] Output parameters provide useful data
+- [ ] Error handling is graceful with fallbacks
 - [ ] Process is documented for future reference
 
 ## 📚 **Resources:**
