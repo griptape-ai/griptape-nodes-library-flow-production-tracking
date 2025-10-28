@@ -5,7 +5,7 @@ import httpx
 from base_shotgrid_node import BaseShotGridNode
 from image_utils import convert_image_for_shotgrid, get_mime_type, should_convert_image
 
-from griptape_nodes.exe_types.core_types import Parameter, ParameterGroup, ParameterMessage, ParameterMode
+from griptape_nodes.exe_types.core_types import Parameter, ParameterMode
 from griptape_nodes.retained_mode.griptape_nodes import logger
 
 
@@ -13,87 +13,81 @@ class FlowUpdateAsset(BaseShotGridNode):
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
 
-        # Dynamic message that will be updated with the updated asset link - placed at top for prominence
-        self.asset_message = ParameterMessage(
-            name="asset_message",
-            title="Asset Management",
-            value="Update an asset to see the link to view it in ShotGrid. Click the button to view all assets.",
-            button_link="",
-            button_text="View All Assets",
-            variant="info",
-            full_width=True,
+        self.add_parameter(
+            Parameter(
+                name="asset_id",
+                type="string",
+                default_value=None,
+                tooltip="The ID of the asset to update.",
+            )
         )
-        self.add_node_element(self.asset_message)
-
-        # Set the initial link to the main assets page
-        self._update_asset_message_initial()
-
-        with ParameterGroup(name="asset_input") as asset_input:
-            self.add_parameter(
-                Parameter(
-                    name="asset_id",
-                    type="string",
-                    default_value=None,
-                    tooltip="The ID of the asset to update.",
-                )
+        # Asset URL output parameter
+        self.add_parameter(
+            Parameter(
+                name="asset_url",
+                type="string",
+                default_value="",
+                tooltip="The URL to view the asset in ShotGrid.",
+                allowed_modes={ParameterMode.OUTPUT},
             )
-            # Note: Assets in ShotGrid don't have names, only codes
-            # This parameter is kept for backward compatibility but will be ignored
-            self.add_parameter(
-                Parameter(
-                    name="asset_name",
-                    type="string",
-                    default_value=None,
-                    tooltip="The new name for the asset (optional). Note: Assets in ShotGrid only have codes, not names, so this field will be ignored.",
-                )
+        )
+        # Note: Assets in ShotGrid don't have names, only codes
+        # This parameter is kept for backward compatibility but will be ignored
+        self.add_parameter(
+            Parameter(
+                name="asset_name",
+                type="string",
+                default_value=None,
+                tooltip="The new name for the asset (optional). Note: Assets in ShotGrid only have codes, not names, so this field will be ignored.",
             )
-            self.add_parameter(
-                Parameter(
-                    name="asset_code",
-                    type="string",
-                    default_value=None,
-                    tooltip="The new code for the asset (optional).",
-                )
+        )
+        self.add_parameter(
+            Parameter(
+                name="asset_code",
+                type="string",
+                default_value=None,
+                tooltip="The new code for the asset (optional).",
             )
-            self.add_parameter(
-                Parameter(
-                    name="asset_type",
-                    type="string",
-                    default_value=None,
-                    tooltip="The new type for the asset (optional).",
-                )
+        )
+        self.add_parameter(
+            Parameter(
+                name="asset_type",
+                type="string",
+                default_value=None,
+                tooltip="The new type for the asset (optional).",
             )
-            self.add_parameter(
-                Parameter(
-                    name="asset_description",
-                    type="string",
-                    default_value=None,
-                    tooltip="The new description for the asset (optional).",
-                )
+        )
+        self.add_parameter(
+            Parameter(
+                name="asset_description",
+                type="string",
+                default_value=None,
+                tooltip="The new description for the asset (optional).",
             )
-            self.add_parameter(
-                Parameter(
-                    name="thumbnail_image",
-                    type="ImageUrlArtifact",
-                    default_value=None,
-                    tooltip="The new thumbnail image for the asset (optional).",
-                    ui_options={
-                        "clickable_file_browser": True,
-                        "expander": True,
-                    },
-                )
+        )
+        self.add_parameter(
+            Parameter(
+                name="thumbnail_image",
+                type="ImageUrlArtifact",
+                default_value=None,
+                tooltip="The new thumbnail image for the asset (optional).",
+                ui_options={
+                    "clickable_file_browser": True,
+                    "expander": True,
+                },
             )
-            self.add_parameter(
-                Parameter(
-                    name="updated_asset",
-                    output_type="json",
-                    type="json",
-                    default_value=None,
-                    tooltip="The updated asset data.",
-                    allowed_modes={ParameterMode.OUTPUT},
-                    ui_options={"hide_property": True},
-                )
+        )
+        self.add_parameter(
+            Parameter(
+                name="updated_asset",
+                output_type="json",
+                type="json",
+                default_value=None,
+                tooltip="The updated asset data.",
+                allowed_modes={ParameterMode.OUTPUT},
+                ui_options={"hide_property": True},
             )
+        )
 
     def _download_image_from_url(self, image_url: str) -> bytes:
         """Download image from URL and return as bytes"""
@@ -330,84 +324,36 @@ class FlowUpdateAsset(BaseShotGridNode):
             logger.error(f"{self.name}: Failed to update asset thumbnail: {e}")
             raise
 
-    def _update_asset_message(self, asset_id: int, asset_code: str) -> None:
-        """Update the ParameterMessage with a link to the updated asset in ShotGrid."""
+    def _update_asset_url(self, asset_id: int) -> None:
+        """Update the asset_url output parameter with the ShotGrid URL."""
         try:
             # Get the base URL from config
             base_url = self._get_shotgrid_config()["base_url"]
 
             # Create the ShotGrid URL for the asset
-            shotgrid_url = f"{base_url}detail/Asset/{asset_id}"
+            asset_url = f"{base_url}detail/Asset/{asset_id}"
 
-            # Update the ParameterMessage
-            message_param = self.get_element_by_name_and_type("asset_message", ParameterMessage)
-            message_param.button_text = f"View Asset: {asset_code}"
-            message_param.button_link = shotgrid_url
-            message_param.value = (
-                f"Asset '{asset_code}' (ID: {asset_id}) updated successfully! Click the button to view it in ShotGrid."
-            )
+            # Set the output parameter
+            self.set_parameter_value("asset_url", asset_url)
+            self.parameter_output_values["asset_url"] = asset_url
+            self.publish_update_to_parameter("asset_url", asset_url)
 
-            logger.info(f"{self.name}: Updated asset message with link: {shotgrid_url}")
+            logger.info(f"{self.name}: Updated asset_url to: {asset_url}")
 
         except Exception as e:
-            logger.warning(f"{self.name}: Failed to update asset message: {e}")
-
-    def _update_asset_message_initial(self) -> None:
-        """Update the ParameterMessage to show a link to the main assets page."""
-        try:
-            base_url = self._get_shotgrid_config()["base_url"]
-            message_param = self.get_element_by_name_and_type("asset_message", ParameterMessage)
-            message_param.button_text = "View All Assets"
-            message_param.button_link = f"{base_url}assets"
-            message_param.value = (
-                "Update an asset to see the link to view it in ShotGrid. Click the button to view all assets."
-            )
-            logger.info(f"{self.name}: Updated asset message to show main assets page link.")
-        except Exception as e:
-            logger.warning(f"{self.name}: Failed to update asset message to show main assets page: {e}")
+            logger.warning(f"{self.name}: Failed to update asset_url: {e}")
 
     def after_value_set(self, parameter: Parameter, value: Any) -> None:
-        """Update the ParameterMessage when asset_id changes to show a link to that specific asset."""
+        """Update the asset_url output when asset_id changes."""
         if parameter.name == "asset_id" and value:
             try:
-                # Get access token and base URL
-                access_token = self._get_access_token()
-                base_url = self._get_shotgrid_config()["base_url"]
-
-                # Make API call to get asset data (which includes the proper URL)
-                asset_url = f"{base_url}api/v1/entity/assets/{value}"
-                headers = {
-                    "Authorization": f"Bearer {access_token}",
-                    "Accept": "application/json",
-                }
-
-                with httpx.Client() as client:
-                    response = client.get(asset_url, headers=headers)
-                    if response.status_code == 200:
-                        asset_data = response.json()
-                        # Get the self link from the asset data
-                        shotgrid_url = asset_data.get("data", {}).get("links", {}).get("self", "")
-
-                        if shotgrid_url:
-                            # Construct the full URL by combining base URL with the self link
-                            # The self link is relative (e.g., "/api/v1/entity/assets/2027")
-                            # We need to convert it to a web URL (e.g., "https://griptape-ai.shotgrid.autodesk.com/detail/Asset/2027")
-                            full_url = f"{base_url}detail/Asset/{value}"
-
-                            # Update the ParameterMessage to show the specific asset
-                            message_param = self.get_element_by_name_and_type("asset_message", ParameterMessage)
-                            message_param.button_text = f"View Asset (ID: {value})"
-                            message_param.button_link = full_url
-                            message_param.value = f"Update asset ID {value}. Click the button to view it in ShotGrid."
-
-                            logger.info(f"{self.name}: Updated asset message to show asset {value}")
-                        else:
-                            logger.warning(f"{self.name}: No self link found in asset data for {value}")
-                    else:
-                        logger.warning(f"{self.name}: Failed to get asset data for {value}: {response.status_code}")
-
+                # Convert asset_id to integer if it's a string
+                asset_id = int(value)
+                self._update_asset_url(asset_id)
+            except (ValueError, TypeError):
+                logger.warning(f"{self.name}: Invalid asset_id value: {value}")
             except Exception as e:
-                logger.warning(f"{self.name}: Failed to update asset message for asset {value}: {e}")
+                logger.warning(f"{self.name}: Failed to update asset_url for asset {value}: {e}")
 
         return super().after_value_set(parameter, value)
 
@@ -535,8 +481,8 @@ class FlowUpdateAsset(BaseShotGridNode):
 
             logger.info(f"{self.name}: Successfully updated asset {asset_id}")
 
-            # Update the ParameterMessage with a link to the updated asset
-            self._update_asset_message(asset_id, asset_code)
+            # Update the asset_url output
+            self._update_asset_url(asset_id)
 
         except Exception as e:
             logger.error(f"{self.name} encountered an error: {e!s}")

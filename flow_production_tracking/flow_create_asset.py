@@ -6,7 +6,8 @@ from base_shotgrid_node import BaseShotGridNode
 from flow_utils import create_shotgrid_api
 from image_utils import convert_image_for_shotgrid, get_mime_type, should_convert_image
 
-from griptape_nodes.exe_types.core_types import Parameter, ParameterGroup, ParameterMessage, ParameterMode
+from griptape_nodes.exe_types.core_types import Parameter, ParameterMode
+from griptape_nodes.exe_types.param_types.parameter_string import ParameterString
 from griptape_nodes.retained_mode.griptape_nodes import logger
 from griptape_nodes.traits.options import Options
 
@@ -15,113 +16,102 @@ class FlowCreateAsset(BaseShotGridNode):
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
 
-        # Dynamic message that will be updated with the created asset link - placed at top for prominence
-        self.asset_message = ParameterMessage(
-            name="asset_message",
-            title="Asset Management",
-            value="Create an asset to see the link to view it in ShotGrid. Click the button to view all assets.",
-            button_link="",
-            button_text="View All Assets",
-            variant="info",
-            full_width=True,
+        self.add_parameter(
+            Parameter(
+                name="project_id",
+                type="string",
+                default_value=None,
+                tooltip="The ID of the project to create the asset in.",
+            )
         )
-        self.add_node_element(self.asset_message)
+        self.add_parameter(
+            ParameterString(
+                name="asset_code",
+                default_value=None,
+                tooltip="The name for the asset to create.",
+                placeholder_text="Enter the name for the asset to create.",
+            )
+        )
+        self.add_parameter(
+            Parameter(
+                name="asset_type",
+                type="string",
+                default_value="Character",
+                tooltip="The type of asset to create (e.g., Character, Prop, Environment).",
+                traits={
+                    Options(choices=["Character", "Prop", "Environment", "Vehicle", "FX", "Camera", "Light", "Audio"])
+                },
+            )
+        )
+        self.add_parameter(
+            ParameterString(
+                name="asset_description",
+                type="string",
+                default_value=None,
+                tooltip="The description for the asset to create.",
+                multiline=True,
+                placeholder_text="Enter the description for the asset to create.",
+            )
+        )
+        self.add_parameter(
+            Parameter(
+                name="use_template",
+                type="boolean",
+                default_value=True,
+                tooltip="Whether to use a template for asset creation. Templates provide predefined structure and tasks.",
+            )
+        )
+        self.add_parameter(
+            Parameter(
+                name="task_template_id",
+                type="string",
+                default_value=None,
+                tooltip="The task template to apply to the asset. This will create the appropriate workflow structure.",
+                traits={Options(choices=["No task templates available"])},
+            )
+        )
 
-        # Set the initial link to the main assets page
-        self._update_asset_message_initial()
-
-        with ParameterGroup(name="asset_input") as asset_input:
-            self.add_parameter(
-                Parameter(
-                    name="project_id",
-                    type="string",
-                    default_value=None,
-                    tooltip="The ID of the project to create the asset in.",
-                )
+        self.add_parameter(
+            Parameter(
+                name="thumbnail_image",
+                type="ImageUrlArtifact",
+                default_value=None,
+                tooltip="The thumbnail image for the asset (optional).",
+                ui_options={
+                    "clickable_file_browser": True,
+                    "expander": True,
+                },
             )
-            self.add_parameter(
-                Parameter(
-                    name="asset_code",
-                    type="string",
-                    default_value=None,
-                    tooltip="The code for the asset to create.",
-                )
+        )
+        self.add_parameter(
+            ParameterString(
+                name="asset_id",
+                default_value=None,
+                tooltip="The ID of the newly created asset.",
+                allowed_modes={ParameterMode.OUTPUT},
+                placeholder_text="The ID of the newly created asset.",
             )
-            self.add_parameter(
-                Parameter(
-                    name="asset_type",
-                    type="string",
-                    default_value="Character",
-                    tooltip="The type of asset to create (e.g., Character, Prop, Environment).",
-                    traits={
-                        Options(
-                            choices=["Character", "Prop", "Environment", "Vehicle", "FX", "Camera", "Light", "Audio"]
-                        )
-                    },
-                )
+        )
+        self.add_parameter(
+            ParameterString(
+                name="asset_url",
+                default_value="",
+                tooltip="The URL of the newly created asset.",
+                allowed_modes={ParameterMode.OUTPUT},
+                placeholder_text="The URL of the newly created asset.",
             )
-            self.add_parameter(
-                Parameter(
-                    name="asset_description",
-                    type="string",
-                    default_value=None,
-                    tooltip="The description for the asset to create.",
-                )
+        )
+        self.add_parameter(
+            Parameter(
+                name="created_asset",
+                output_type="json",
+                type="json",
+                default_value=None,
+                tooltip="The created asset data.",
+                allowed_modes={ParameterMode.OUTPUT},
+                ui_options={"hide_property": True},
             )
-            self.add_parameter(
-                Parameter(
-                    name="use_template",
-                    type="boolean",
-                    default_value=True,
-                    tooltip="Whether to use a template for asset creation. Templates provide predefined structure and tasks.",
-                )
-            )
-            self.add_parameter(
-                Parameter(
-                    name="task_template_id",
-                    type="string",
-                    default_value=None,
-                    tooltip="The task template to apply to the asset. This will create the appropriate workflow structure.",
-                    traits={Options(choices=["No task templates available"])},
-                )
-            )
-
-            self.add_parameter(
-                Parameter(
-                    name="thumbnail_image",
-                    type="ImageUrlArtifact",
-                    default_value=None,
-                    tooltip="The thumbnail image for the asset (optional).",
-                    ui_options={
-                        "clickable_file_browser": True,
-                        "expander": True,
-                    },
-                )
-            )
-            self.add_parameter(
-                Parameter(
-                    name="created_asset",
-                    output_type="json",
-                    type="json",
-                    default_value=None,
-                    tooltip="The created asset data.",
-                    allowed_modes={ParameterMode.OUTPUT},
-                    ui_options={"hide_property": True},
-                )
-            )
-            self.add_parameter(
-                Parameter(
-                    name="asset_id",
-                    output_type="string",
-                    type="string",
-                    default_value=None,
-                    tooltip="The ID of the newly created asset.",
-                    allowed_modes={ParameterMode.OUTPUT},
-                    ui_options={"hide_property": True},
-                )
-            )
-
-        self.add_node_element(asset_input)
+        )
 
         # Populate task template choices after all parameters are added
         self._populate_task_template_choices()
@@ -140,8 +130,15 @@ class FlowCreateAsset(BaseShotGridNode):
 
                 # Update the asset_type parameter with the new choices
                 if asset_types:
-                    self._update_option_choices("asset_type", asset_types, asset_types[0])
-                    logger.info(f"{self.name}: Updated asset_type choices: {asset_types}")
+                    # Preserve current selection if it's still valid, otherwise use first item
+                    current_selection = self.get_parameter_value("asset_type")
+                    if current_selection and current_selection in asset_types:
+                        selected_value = current_selection
+                    else:
+                        selected_value = asset_types[0]
+
+                    self._update_option_choices("asset_type", asset_types, selected_value)
+                    logger.info(f"{self.name}: Updated asset_type choices: {asset_types}, selected: {selected_value}")
                 else:
                     self._update_option_choices("asset_type", ["No asset types available"], "No asset types available")
 
@@ -149,7 +146,15 @@ class FlowCreateAsset(BaseShotGridNode):
                 logger.warning(f"{self.name}: Could not get asset types for project {value}: {e}")
                 # Fallback to common asset types
                 fallback_types = ["Character", "Prop", "Environment", "Vehicle", "FX", "Camera", "Light", "Audio"]
-                self._update_option_choices("asset_type", fallback_types, fallback_types[0])
+
+                # Preserve current selection if it's still valid, otherwise use first item
+                current_selection = self.get_parameter_value("asset_type")
+                if current_selection and current_selection in fallback_types:
+                    selected_value = current_selection
+                else:
+                    selected_value = fallback_types[0]
+
+                self._update_option_choices("asset_type", fallback_types, selected_value)
 
         elif parameter.name == "asset_type" and value:
             # When asset_type changes, update task template choices for that specific type
@@ -431,42 +436,6 @@ class FlowCreateAsset(BaseShotGridNode):
         except Exception as e:
             logger.error(f"{self.name}: Failed to update asset thumbnail: {e}")
             raise
-
-    def _update_asset_message(self, asset_id: int, asset_code: str) -> None:
-        """Update the ParameterMessage with a link to the created asset in ShotGrid."""
-        try:
-            # Get the base URL from config
-            base_url = self._get_shotgrid_config()["base_url"]
-
-            # Create the ShotGrid URL for the asset
-            shotgrid_url = f"{base_url}detail/Asset/{asset_id}"
-
-            # Update the ParameterMessage
-            message_param = self.get_element_by_name_and_type("asset_message", ParameterMessage)
-            message_param.button_text = f"View Asset: {asset_code}"
-            message_param.button_link = shotgrid_url
-            message_param.value = (
-                f"Asset '{asset_code}' (ID: {asset_id}) created successfully! Click the button to view it in ShotGrid."
-            )
-
-            logger.info(f"{self.name}: Updated asset message with link: {shotgrid_url}")
-
-        except Exception as e:
-            logger.warning(f"{self.name}: Failed to update asset message: {e}")
-
-    def _update_asset_message_initial(self) -> None:
-        """Update the ParameterMessage to show a link to the main assets page."""
-        try:
-            base_url = self._get_shotgrid_config()["base_url"]
-            message_param = self.get_element_by_name_and_type("asset_message", ParameterMessage)
-            message_param.button_text = "View All Assets"
-            message_param.button_link = f"{base_url}assets"
-            message_param.value = (
-                "Create an asset to see the link to view it in ShotGrid. Click the button to view all assets."
-            )
-            logger.info(f"{self.name}: Updated asset message to show main assets page link.")
-        except Exception as e:
-            logger.warning(f"{self.name}: Failed to update asset message to show main assets page: {e}")
 
     def _populate_task_template_choices(self) -> None:
         """Populate the task_template_id parameter with available task templates for Asset entity type"""
@@ -765,6 +734,8 @@ class FlowCreateAsset(BaseShotGridNode):
 
             thumbnail_image = self.get_parameter_value("thumbnail_image")
 
+            logger.info(f"{self.name}: Creating asset with type: '{asset_type}'")
+
             if not project_id:
                 logger.error(f"{self.name}: project_id is required")
                 return
@@ -833,6 +804,8 @@ class FlowCreateAsset(BaseShotGridNode):
                     "sg_asset_type": asset_type,
                     "project": {"type": "Project", "id": int(project_id)},
                 }
+
+                logger.info(f"{self.name}: Creating asset with data: {asset_data}")
                 if asset_description:
                     asset_data["description"] = asset_description
 
@@ -881,9 +854,6 @@ class FlowCreateAsset(BaseShotGridNode):
                     created_asset = data.get("data", {})
                     asset_id = created_asset.get("id")
                     logger.info(f"{self.name}: Asset created successfully with ID: {asset_id}")
-
-            # Update the ParameterMessage with a link to the created asset
-            self._update_asset_message(asset_id, asset_code)
 
             # Upload thumbnail if provided
             if thumbnail_image and asset_id:
@@ -961,10 +931,37 @@ class FlowCreateAsset(BaseShotGridNode):
             self.parameter_output_values["created_asset"] = final_asset_data
             self.parameter_output_values["asset_id"] = asset_id
 
+            # Publish updates to ensure UI refreshes
+            self.publish_update_to_parameter("created_asset", final_asset_data)
+            self.publish_update_to_parameter("asset_id", asset_id)
+
+            # Update the asset_url output
+            if asset_id:
+                self._update_asset_url(asset_id)
+
             logger.info(f"{self.name}: Successfully created asset {asset_id}")
 
         except Exception as e:
             logger.error(f"{self.name} encountered an error: {e!s}")
+
+    def _update_asset_url(self, asset_id: int) -> None:
+        """Update the asset_url output parameter with the ShotGrid URL."""
+        try:
+            # Get the base URL from config
+            base_url = self._get_shotgrid_config()["base_url"]
+
+            # Create the ShotGrid URL for the asset
+            asset_url = f"{base_url}detail/Asset/{asset_id}"
+
+            # Set the output parameter
+            self.set_parameter_value("asset_url", asset_url)
+            self.parameter_output_values["asset_url"] = asset_url
+            self.publish_update_to_parameter("asset_url", asset_url)
+
+            logger.info(f"{self.name}: Updated asset_url to: {asset_url}")
+
+        except Exception as e:
+            logger.warning(f"{self.name}: Failed to update asset_url: {e}")
 
     def _create_tasks_from_template(
         self, asset_id: int, task_template_id: int, access_token: str, base_url: str

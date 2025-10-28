@@ -150,6 +150,46 @@
         "description": "Griptape Node that updates asset information in ShotGrid.",
         "display_name": "Update Asset"
       }
+    },
+    {
+      "class_name": "FlowListTasks",
+      "file_path": "flow_list_tasks.py",
+      "metadata": {
+        "category": "autodesk",
+        "group": "tasks",
+        "description": "Griptape Node that lists tasks for an asset, shot, or project in ShotGrid.",
+        "display_name": "List Tasks"
+      }
+    },
+    {
+      "class_name": "FlowCreateTask",
+      "file_path": "flow_create_task.py",
+      "metadata": {
+        "category": "autodesk",
+        "group": "tasks",
+        "description": "Griptape Node that creates a new task in ShotGrid.",
+        "display_name": "Create Task"
+      }
+    },
+    {
+      "class_name": "FlowUpdateTask",
+      "file_path": "flow_update_task.py",
+      "metadata": {
+        "category": "autodesk",
+        "group": "tasks",
+        "description": "Griptape Node that updates task information in ShotGrid.",
+        "display_name": "Update Task"
+      }
+    },
+    {
+      "class_name": "FlowGetTaskStatus",
+      "file_path": "flow_get_task_status.py",
+      "metadata": {
+        "category": "autodesk",
+        "group": "tasks",
+        "description": "Griptape Node that gets task status and information from ShotGrid.",
+        "display_name": "Get Task Status"
+      }
     }
   ]
 }

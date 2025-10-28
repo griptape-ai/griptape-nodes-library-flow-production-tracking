@@ -210,6 +210,86 @@ Templates are identified by different fields depending on entity type:
 - **Task Templates**: `entity_type` field (e.g., "Asset", "Shot")
 - **Other entities**: May use `template: true` or similar boolean fields
 
+## 🔧 **ShotGrid REST API Filter Patterns:**
+
+### **Entity Relationship Filtering**
+
+The ShotGrid REST API uses a specific syntax for filtering by entity relationships:
+
+```bash
+# Correct syntax for filtering tasks by entity
+filter[entity.EntityType.id]=entity_id
+
+# Examples:
+filter[entity.Asset.id]=2208        # Tasks for Asset ID 2208
+filter[entity.Shot.id]=1234         # Tasks for Shot ID 1234
+filter[entity.Project.id]=264       # Tasks for Project ID 264
+```
+
+### **Common Filter Patterns**
+
+```bash
+# Filter by single entity
+filter[entity.Asset.id]=2208
+
+# Filter by multiple entities (OR logic)
+filter[entity.Asset.id]=2208,2209,2210
+
+# Filter by project
+filter[project.Project.id]=264
+
+# Filter by status
+filter[sg_status_list]=wtg,ip,fin
+
+# Filter by assignee
+filter[task_assignees.HumanUser.id]=123
+```
+
+### **Entity Discovery Optimization**
+
+Instead of iterating through entity types to find an entity, query entity endpoints directly:
+
+```python
+# Efficient approach - query entity directly
+entity_types = ["Asset", "Shot", "Sequence", "Episode", "Project"]
+for entity_type in entity_types:
+    url = f"{base_url}api/v1/entity/{entity_type.lower()}s"
+    params = {"fields": "id,project", "filter[id]": str(entity_id)}
+    response = client.get(url, headers=headers, params=params)
+    if response.status_code == 200:
+        data = response.json()
+        if data.get("data"):
+            # Found the entity type and project info
+            break
+```
+
+### **Task Data Structure**
+
+Tasks have rich data available including:
+
+**Core Information:**
+- `content`: Task name/description
+- `sg_status_list`: Status (wtg, ip, fin, etc.)
+- `sg_sort_order`: Display order
+- `sg_description`: Detailed description
+- `sg_priority_1`: Priority level
+
+**Relationships:**
+- `entity`: The entity this task belongs to (Asset, Shot, etc.)
+- `project`: The project this task belongs to
+- `step`: The pipeline step
+- `task_assignees`: Who's assigned to this task
+- `template_task`: The template this task was created from
+- `upstream_tasks`: Tasks that must be completed before this one
+- `downstream_tasks`: Tasks that depend on this one
+- `sibling_tasks`: Other tasks for the same entity
+
+**Time Tracking:**
+- `duration`: Task duration
+- `est_in_mins`: Estimated time in minutes
+- `time_logs_sum`: Total time logged
+- `start_date`, `due_date`: Scheduling information
+
 ### **Testing Template Relationships**
 
 ```python

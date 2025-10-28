@@ -507,6 +507,135 @@ class ShotGridAPI:
 
         return False
 
+    def get_tasks_for_entity(self, entity_type: str, entity_id: int, project_id: int = None) -> list[dict]:
+        """Get all tasks for a specific entity (Asset, Shot, etc.)"""
+        try:
+            url = f"{self.base_url}api/v1/entity/tasks"
+            params = {
+                "fields": "id,content,entity,project,step,task_assignees,sg_status_list,created_at,updated_at",
+                "filter[entity]": f"{entity_type}.{entity_id}",
+            }
+
+            if project_id:
+                params["filter[project]"] = f"Project.{project_id}"
+
+            with httpx.Client() as client:
+                response = client.get(url, headers=self.headers, params=params)
+                response.raise_for_status()
+
+                data = response.json()
+                tasks = data.get("data", [])
+
+                logger.info(f"Found {len(tasks)} tasks for {entity_type} {entity_id}")
+                return tasks
+
+        except Exception as e:
+            logger.error(f"Failed to get tasks for {entity_type} {entity_id}: {e}")
+            return []
+
+    def get_tasks_for_project(self, project_id: int) -> list[dict]:
+        """Get all tasks for a project"""
+        try:
+            url = f"{self.base_url}api/v1/entity/tasks"
+            params = {
+                "fields": "id,content,entity,project,step,task_assignees,sg_status_list,created_at,updated_at",
+                "filter[project]": f"Project.{project_id}",
+            }
+
+            with httpx.Client() as client:
+                response = client.get(url, headers=self.headers, params=params)
+                response.raise_for_status()
+
+                data = response.json()
+                tasks = data.get("data", [])
+
+                logger.info(f"Found {len(tasks)} tasks for project {project_id}")
+                return tasks
+
+        except Exception as e:
+            logger.error(f"Failed to get tasks for project {project_id}: {e}")
+            return []
+
+    def update_task(self, task_id: int, task_data: dict) -> dict | None:
+        """Update an existing task"""
+        try:
+            url = f"{self.base_url}api/v1/entity/tasks/{task_id}"
+            headers = {**self.headers, "Content-Type": "application/json"}
+
+            with httpx.Client() as client:
+                response = client.patch(url, headers=headers, json=task_data)
+                response.raise_for_status()
+
+                data = response.json()
+                return data.get("data", {})
+
+        except Exception as e:
+            logger.error(f"Failed to update task {task_id}: {e}")
+            return None
+
+    def get_task_statuses(self) -> list[dict]:
+        """Get available task statuses"""
+        try:
+            url = f"{self.base_url}api/v1/entity/task_statuses"
+            params = {"fields": "id,code,short_name"}
+
+            with httpx.Client() as client:
+                response = client.get(url, headers=self.headers, params=params)
+                response.raise_for_status()
+
+                data = response.json()
+                statuses = data.get("data", [])
+
+                logger.info(f"Found {len(statuses)} task statuses")
+                return statuses
+
+        except Exception as e:
+            logger.error(f"Failed to get task statuses: {e}")
+            return []
+
+    def get_users(self, project_id: int = None) -> list[dict]:
+        """Get users, optionally filtered by project"""
+        try:
+            url = f"{self.base_url}api/v1/entity/users"
+            params = {"fields": "id,login,name,email"}
+            
+            if project_id:
+                params["filter[projects]"] = f"Project.{project_id}"
+
+            with httpx.Client() as client:
+                response = client.get(url, headers=self.headers, params=params)
+                response.raise_for_status()
+
+                data = response.json()
+                users = data.get("data", [])
+                
+                logger.info(f"Found {len(users)} users")
+                return users
+
+        except Exception as e:
+            logger.error(f"Failed to get users: {e}")
+            return []
+
+    def get_steps(self) -> list[dict]:
+        """Get available steps"""
+        try:
+            url = f"{self.base_url}api/v1/entity/steps"
+            params = {"fields": "id,code,short_name"}
+
+            with httpx.Client() as client:
+                response = client.get(url, headers=self.headers, params=params)
+                response.raise_for_status()
+
+                data = response.json()
+                steps = data.get("data", [])
+                
+                logger.info(f"Found {len(steps)} steps")
+                return steps
+
+        except Exception as e:
+            logger.error(f"Failed to get steps: {e}")
+            return []
+
 
 def create_shotgrid_api(access_token: str, base_url: str) -> ShotGridAPI:
     """Factory function to create a ShotGridAPI instance"""
