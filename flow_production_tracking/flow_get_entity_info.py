@@ -3,12 +3,16 @@ from typing import Any
 import httpx
 from base_shotgrid_node import BaseShotGridNode
 
-from griptape_nodes.exe_types.core_types import (
-    Parameter,
-    ParameterMode,
-)
+from griptape_nodes.exe_types.core_types import Parameter, ParameterMode
 from griptape_nodes.exe_types.param_types.parameter_string import ParameterString
-from griptape_nodes.retained_mode.events.parameter_events import SetParameterValueRequest
+from griptape_nodes.retained_mode.events.node_events import ListParametersOnNodeRequest
+from griptape_nodes.retained_mode.events.parameter_events import (
+    AddParameterToNodeRequest,
+    GetConnectionsForParameterRequest,
+    GetConnectionsForParameterResultSuccess,
+    RemoveParameterFromNodeRequest,
+    SetParameterValueRequest,
+)
 from griptape_nodes.retained_mode.griptape_nodes import GriptapeNodes, logger
 from griptape_nodes.traits.options import Options
 
@@ -24,16 +28,6 @@ ENTITY_TYPES = [
     "Note",
     "Playlist",
     "Version",
-    "CustomEntity01",
-    "CustomEntity02",
-    "CustomEntity03",
-    "CustomEntity04",
-    "CustomEntity05",
-    "CustomEntity06",
-    "CustomEntity07",
-    "CustomEntity08",
-    "CustomEntity09",
-    "CustomEntity10",
 ]
 
 
@@ -81,64 +75,11 @@ class FlowGetEntityInfo(BaseShotGridNode):
         )
         self.add_parameter(
             Parameter(
-                name="entity_id_output",
-                type="str",
-                default_value="",
-                tooltip="ID of the entity",
-                allowed_modes={ParameterMode.OUTPUT},
-            )
-        )
-        self.add_parameter(
-            ParameterString(
-                name="entity_name",
-                default_value="",
-                tooltip="Name of the entity",
-                allowed_modes={ParameterMode.OUTPUT},
-            )
-        )
-        self.add_parameter(
-            ParameterString(
-                name="entity_code",
-                default_value="",
-                tooltip="Code of the entity",
-                allowed_modes={ParameterMode.OUTPUT},
-            )
-        )
-        self.add_parameter(
-            ParameterString(
-                name="entity_type_output",
-                default_value="",
-                tooltip="Type of the entity",
-                allowed_modes={ParameterMode.OUTPUT},
-            )
-        )
-        self.add_parameter(
-            Parameter(
                 name="entity_data",
                 type="json",
                 default_value={},
                 allowed_modes={ParameterMode.OUTPUT},
                 tooltip="Complete data for the entity",
-                ui_options={"hide_property": True},
-            )
-        )
-        self.add_parameter(
-            Parameter(
-                name="attributes",
-                type="json",
-                default_value={},
-                allowed_modes={ParameterMode.OUTPUT},
-                tooltip="Attributes of the entity",
-                ui_options={"hide_property": True},
-            )
-        )
-        self.add_parameter(
-            Parameter(
-                name="relationships",
-                type="json",
-                default_value={},
-                allowed_modes={ParameterMode.OUTPUT},
-                tooltip="Relationships of the entity",
                 ui_options={"hide_property": True},
             )
         )
@@ -220,6 +161,119 @@ class FlowGetEntityInfo(BaseShotGridNode):
         self.parameter_output_values["entity_url"] = entity_url
         self.publish_update_to_parameter("entity_url", entity_url)
 
+    def _get_current_parameter_names(self) -> set[str]:
+        """Get the actual parameter names that exist on this node."""
+        try:
+            result = GriptapeNodes.handle_request(ListParametersOnNodeRequest(node_name=self.name))
+            if hasattr(result, "parameter_names"):
+                return set(result.parameter_names)
+            return set()
+        except Exception as e:
+            logger.warning(f"{self.name}: Error getting parameter names: {e}")
+            return set()
+
+    def _is_parameter_connected(self, param_name: str) -> bool:
+        """Check if a parameter has any connections (incoming or outgoing)."""
+        try:
+            result = GriptapeNodes.handle_request(
+                GetConnectionsForParameterRequest(parameter_name=param_name, node_name=self.name)
+            )
+            if isinstance(result, GetConnectionsForParameterResultSuccess):
+                return result.has_incoming_connections() or result.has_outgoing_connections()
+            # If result is a failure, assume not connected (safer to delete)
+            return False
+        except Exception as e:
+            logger.warning(f"{self.name}: Error checking connections for '{param_name}': {e}")
+            # On error, assume connected (safer to keep)
+            return True
+
+    def _sync_dynamic_parameters(self, attributes: dict) -> None:
+        """Sync dynamic parameters with entity attributes - simple and clean."""
+        # 1. Get list of current dynamic parameters (excluding built-in node parameters)
+        static_params = {
+            "entity_url",
+            "entity_data",
+            "entity_type",
+            "entity_id",
+            "fields",
+            "exec_out",
+            "exec_in",
+            "execution_environment",
+            "job_group",
+        }
+        all_current_params = self._get_current_parameter_names()
+        current_dynamic_params = all_current_params - static_params
+
+        # 2. Get list of parameters we want to add from entity data
+        desired_params = set(attributes.keys())
+
+        logger.info(f"{self.name}: All current params: {all_current_params}")
+        logger.info(f"{self.name}: Current dynamic params: {current_dynamic_params}")
+        logger.info(f"{self.name}: Desired params: {desired_params}")
+        logger.info(f"{self.name}: Parameters to update: {current_dynamic_params & desired_params}")
+        logger.info(f"{self.name}: Parameters to create: {desired_params - current_dynamic_params}")
+        logger.info(f"{self.name}: Parameters to delete: {current_dynamic_params - desired_params}")
+
+        # 3. Update existing parameters that are in both lists
+        for param_name in current_dynamic_params & desired_params:
+            attr_value = attributes[param_name]
+            value_str = str(attr_value) if attr_value is not None else ""
+
+            # Check if the value actually changed
+            current_value = self.parameter_output_values.get(param_name, "")
+            if current_value != value_str:
+                logger.info(f"{self.name}: Updating '{param_name}' from '{current_value}' to '{value_str}'")
+
+                GriptapeNodes.handle_request(
+                    SetParameterValueRequest(parameter_name=param_name, value=value_str, node_name=self.name)
+                )
+                self.parameter_output_values[param_name] = value_str
+                self.publish_update_to_parameter(param_name, value_str)
+
+                logger.info(f"{self.name}: Updated parameter '{param_name}'")
+            else:
+                logger.info(f"{self.name}: Parameter '{param_name}' unchanged, skipping update")
+
+        # 4. Add new parameters that don't exist yet
+        for param_name in desired_params - current_dynamic_params:
+            attr_value = attributes[param_name]
+            value_str = str(attr_value) if attr_value is not None else ""
+
+            GriptapeNodes.handle_request(
+                AddParameterToNodeRequest(
+                    node_name=self.name,
+                    parameter_name=param_name,
+                    default_value=value_str,
+                    tooltip=f"Entity attribute: {param_name}",
+                    type="str",
+                    mode_allowed_output=True,
+                    mode_allowed_input=False,
+                    mode_allowed_property=False,
+                    is_user_defined=True,
+                )
+            )
+
+            self.parameter_output_values[param_name] = value_str
+            self.publish_update_to_parameter(param_name, value_str)
+
+            logger.info(f"{self.name}: Created parameter '{param_name}'")
+
+        # 5. Delete parameters that are no longer in the data
+        for param_name in current_dynamic_params - desired_params:
+            # Check if parameter is connected before deleting
+            is_connected = self._is_parameter_connected(param_name)
+
+            if is_connected:
+                logger.info(f"{self.name}: Skipping deletion of '{param_name}' - parameter is connected")
+                continue
+
+            GriptapeNodes.handle_request(RemoveParameterFromNodeRequest(parameter_name=param_name, node_name=self.name))
+
+            if param_name in self.parameter_output_values:
+                del self.parameter_output_values[param_name]
+
+            logger.info(f"{self.name}: Deleted parameter '{param_name}'")
+
     def _get_entity_schema(self, entity_type: str) -> dict:
         """Get the schema for an entity type to determine available fields."""
         try:
@@ -266,43 +320,25 @@ class FlowGetEntityInfo(BaseShotGridNode):
         attributes = entity_data.get("attributes", {})
         relationships = entity_data.get("relationships", {})
 
-        # Extract common fields
-        entity_name = (
-            attributes.get("name")
-            or attributes.get("code")
-            or f"{entity_data.get('type', 'Entity')} {entity_data.get('id', '')}"
-        )
-
         return {
             "id": entity_data.get("id"),
             "type": entity_data.get("type"),
-            "name": entity_name,
-            "code": attributes.get("code", ""),
-            "description": attributes.get("description", ""),
-            "created_at": attributes.get("created_at", ""),
-            "updated_at": attributes.get("updated_at", ""),
             "attributes": attributes,
             "relationships": relationships,
         }
 
     def _update_output_parameters(self, processed_data: dict) -> None:
         """Update all output parameters with the processed entity data."""
-        params = {
-            "entity_id_output": str(processed_data.get("id", "")),
-            "entity_name": processed_data.get("name", ""),
-            "entity_code": processed_data.get("code", ""),
-            "entity_type_output": processed_data.get("type", ""),
-            "entity_data": processed_data,
-            "attributes": processed_data.get("attributes", {}),
-            "relationships": processed_data.get("relationships", {}),
-        }
+        # Update entity_data
+        GriptapeNodes.handle_request(
+            SetParameterValueRequest(parameter_name="entity_data", value=processed_data, node_name=self.name)
+        )
+        self.parameter_output_values["entity_data"] = processed_data
+        self.publish_update_to_parameter("entity_data", processed_data)
 
-        for param_name, value in params.items():
-            GriptapeNodes.handle_request(
-                SetParameterValueRequest(parameter_name=param_name, value=value, node_name=self.name)
-            )
-            self.parameter_output_values[param_name] = value
-            self.publish_update_to_parameter(param_name, value)
+        # Sync dynamic parameters with entity attributes
+        attributes = processed_data.get("attributes", {})
+        self._sync_dynamic_parameters(attributes)
 
     def process(self) -> None:
         """Get entity information from ShotGrid."""
