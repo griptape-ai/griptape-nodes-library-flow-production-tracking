@@ -190,6 +190,36 @@
         "description": "Griptape Node that gets task status and information from ShotGrid.",
         "display_name": "Get Task Status"
       }
+    },
+    {
+      "class_name": "FlowListUsers",
+      "file_path": "flow_list_users.py",
+      "metadata": {
+        "category": "autodesk",
+        "group": "users",
+        "description": "Griptape Node that lists users in ShotGrid with optional project filtering.",
+        "display_name": "List Users"
+      }
+    },
+    {
+      "class_name": "FlowGetEntityInfo",
+      "file_path": "flow_get_entity_info.py",
+      "metadata": {
+        "category": "autodesk",
+        "group": "general",
+        "description": "Griptape Node that gets detailed information about any ShotGrid entity (Asset, Shot, Sequence, Project, Task, User, etc.) by entity type and ID.",
+        "display_name": "Get Entity Info"
+      }
+    },
+    {
+      "class_name": "FlowUploadFile",
+      "file_path": "flow_upload_file.py",
+      "metadata": {
+        "category": "autodesk",
+        "group": "files",
+        "description": "Griptape Node that uploads files to any ShotGrid entity, creating a version record with the attached file.",
+        "display_name": "Upload File"
+      }
     }
   ]
 }

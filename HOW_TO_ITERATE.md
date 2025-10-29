@@ -644,6 +644,480 @@ def _create_fallback_image(self, text: str, width: int = 200, height: int = 150)
         return None
 ```
 
+## 🔧 **Dynamic Data Management Pattern (List + Select + Refresh):**
+
+### **The "Load All, Select One, Refresh One" Pattern**
+
+This is a powerful UI/UX pattern for managing collections of data (projects, assets, tasks, etc.) that provides excellent user experience and efficient API usage.
+
+#### **Core Pattern Components:**
+
+1. **Process Method**: Loads ALL items from API and populates dropdown
+2. **Selection Change**: Updates display from cached data (no API call)
+3. **Refresh Button**: Updates only the selected item from API
+
+#### **Implementation Structure:**
+
+```python
+class FlowListItems(BaseShotGridNode):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        
+        # Input parameter for selection
+        self.add_parameter(
+            ParameterString(
+                name="selected_item",
+                default_value="Load items to see options",
+                tooltip="Select an item from the list",
+                traits={
+                    Options(choices=ITEM_CHOICES),
+                    Button(
+                        icon="refresh-cw",
+                        variant="secondary",
+                        on_click=self._refresh_selected_item,
+                        label="Refresh Selected",
+                    ),
+                },
+            )
+        )
+        
+        # Output parameters for selected item data
+        self.add_parameter(ParameterString(name="item_id", allowed_modes={ParameterMode.OUTPUT}))
+        self.add_parameter(ParameterString(name="item_name", allowed_modes={ParameterMode.OUTPUT}))
+        self.add_parameter(ParameterString(name="item_url", allowed_modes={ParameterMode.OUTPUT}))
+        self.add_parameter(ParameterString(name="item_description", allowed_modes={ParameterMode.OUTPUT}))
+        self.add_parameter(Parameter(name="item_data", type="json", allowed_modes={ParameterMode.OUTPUT}))
+        self.add_parameter(Parameter(name="all_items", type="json", allowed_modes={ParameterMode.OUTPUT}))
+```
+
+#### **1. Process Method - Load All Items:**
+
+```python
+def process(self) -> None:
+    """Load all items when node is run."""
+    try:
+        # Get current selection to preserve it
+        current_selection = self.get_parameter_value("selected_item")
+        
+        # Load all items from API
+        logger.info(f"{self.name}: Loading items from API...")
+        items = self._fetch_all_items_from_api()
+        
+        if not items:
+            logger.warning(f"{self.name}: No items found")
+            self._update_option_choices("selected_item", ["No items available"], "No items available")
+            return
+        
+        # Process items to choices
+        item_list, choices_names = self._process_items_to_choices(items)
+        
+        # Store all items data using SetParameterValueRequest
+        GriptapeNodes.handle_request(
+            SetParameterValueRequest(parameter_name="all_items", value=item_list, node_name=self.name)
+        )
+        self.parameter_output_values["all_items"] = item_list
+        self.publish_update_to_parameter("all_items", item_list)
+        
+        # Determine what to select
+        selected_value = choices_names[0] if choices_names else "No items available"
+        selected_index = 0
+        
+        # Try to preserve the current selection
+        if current_selection and current_selection != "Load items to see options" and current_selection in choices_names:
+            selected_index = choices_names.index(current_selection)
+            selected_value = current_selection
+            logger.info(f"{self.name}: Preserved selection: {current_selection}")
+        else:
+            selected_value = choices_names[0]
+            selected_index = 0
+            logger.info(f"{self.name}: Selected first item: {choices_names[0]}")
+        
+        # Update the dropdown choices - CRITICAL: Use _update_option_choices, NOT global variables
+        self._update_option_choices("selected_item", choices_names, selected_value)
+        
+        # Update the selected item data
+        self._update_item_data(selected_index)
+        
+        logger.info(f"{self.name}: Successfully loaded {len(item_list)} items")
+        
+    except Exception as e:
+        logger.error(f"{self.name}: Failed to load items: {e}")
+        self._update_option_choices("selected_item", ["Error loading items"], "Error loading items")
+```
+
+#### **2. Selection Change - Use Cached Data:**
+
+```python
+def after_value_set(self, parameter: Parameter, value: Any) -> None:
+    """Update item data when selection changes."""
+    if parameter.name == "selected_item":
+        self.publish_update_to_parameter("selected_item", value)
+        if value and value != "Load items to see options":
+            # Find the index of the selected item by matching display names
+            items = self.get_parameter_value("all_items") or []
+            selected_index = 0
+            
+            # Clean the selection to match against item names
+            clean_selection = value.replace("📋 ", "").replace(" (Template)", "")
+            
+            for i, item in enumerate(items):
+                item_name = item.get("name", "")
+                if item_name == clean_selection:
+                    selected_index = i
+                    break
+            
+            self._update_item_data(selected_index)
+    return super().after_value_set(parameter, value)
+```
+
+#### **3. Refresh Button - Update Selected Item Only:**
+
+```python
+def _refresh_selected_item(self, button: Button, button_details: ButtonDetailsMessagePayload) -> None:
+    """Refresh the selected item when refresh button is clicked."""
+    try:
+        current_selection = self.get_parameter_value("selected_item")
+        if not current_selection or current_selection == "Load items to see options":
+            logger.warning(f"{self.name}: No item selected to refresh")
+            return None
+
+        # Clean the selection to get the actual item name
+        clean_selection = current_selection.replace("📋 ", "").replace(" (Template)", "")
+        
+        # Get the current item ID from all_items
+        items = self.get_parameter_value("all_items") or []
+        selected_item_id = None
+        selected_index = 0
+        
+        for i, item in enumerate(items):
+            item_name = item.get("name", "")
+            if item_name == clean_selection:
+                selected_item_id = item.get("id")
+                selected_index = i
+                break
+        
+        if not selected_item_id:
+            logger.warning(f"{self.name}: Could not find item ID for '{clean_selection}'")
+            return None
+
+        # Fetch fresh data for this specific item
+        logger.info(f"{self.name}: Refreshing item {selected_item_id} ({clean_selection})")
+        fresh_item_data = self._fetch_single_item(selected_item_id)
+        
+        if not fresh_item_data:
+            logger.warning(f"{self.name}: Failed to fetch fresh data for item {selected_item_id}")
+            return None
+
+        # Update the item in all_items using SetParameterValueRequest
+        items[selected_index] = fresh_item_data
+        GriptapeNodes.handle_request(
+            SetParameterValueRequest(parameter_name="all_items", value=items, node_name=self.name)
+        )
+        self.parameter_output_values["all_items"] = items
+        self.publish_update_to_parameter("all_items", items)
+
+        # Update the item data display
+        self._update_item_data(selected_index)
+        
+        logger.info(f"{self.name}: Successfully refreshed item {selected_item_id}")
+
+    except Exception as e:
+        logger.error(f"{self.name}: Failed to refresh selected item: {e}")
+    return None
+```
+
+#### **4. Data Update Helper - Use SetParameterValueRequest:**
+
+```python
+def _update_item_data(self, selected_index: int) -> None:
+    """Update item parameters based on the selected item index."""
+    items = self.get_parameter_value("all_items")
+    if not items or selected_index >= len(items):
+        return
+
+    item = items[selected_index]
+    item_name = item.get("name", f"Item {item.get('id', 'Unknown')}")
+    item_description = item.get("description", "")
+    
+    # Generate web UI URL
+    base_url = self._get_shotgrid_config()["base_url"]
+    item_url = f"{base_url}detail/ItemType/{item['id']}"
+
+    # Update all item parameters using SetParameterValueRequest
+    params = {
+        "item_id": item["id"],
+        "item_name": item_name,
+        "item_url": item_url,
+        "item_description": item_description,
+        "item_data": item,
+    }
+
+    for param_name, value in params.items():
+        GriptapeNodes.handle_request(
+            SetParameterValueRequest(parameter_name=param_name, value=value, node_name=self.name)
+        )
+        self.parameter_output_values[param_name] = value
+        self.publish_update_to_parameter(param_name, value)
+```
+
+#### **5. Single Item Fetch Helper:**
+
+```python
+def _fetch_single_item(self, item_id: int) -> dict | None:
+    """Fetch a single item from API."""
+    try:
+        access_token = self._get_access_token()
+        base_url = self._get_shotgrid_config()["base_url"]
+        url = f"{base_url}api/v1/entity/items/{item_id}"
+        
+        params = {"fields": "id,name,description,status,created_at,updated_at"}
+        headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
+        
+        with httpx.Client() as client:
+            response = client.get(url, headers=headers, params=params)
+            response.raise_for_status()
+            
+            data = response.json()
+            item_data = data.get("data")
+            
+            if item_data:
+                # Add URL field for consistency
+                item_data["url"] = f"{base_url}detail/ItemType/{item_id}"
+                
+                # Process the item data
+                attributes = item_data.get("attributes", {})
+                item_data.update(attributes)
+                
+                return item_data
+            
+            return None
+            
+    except Exception as e:
+        logger.error(f"{self.name}: Failed to fetch item {item_id}: {e}")
+        return None
+```
+
+#### **🚨 CRITICAL: Dropdown Update Pattern**
+
+**❌ WRONG - Don't Use Global Variables:**
+```python
+# DON'T DO THIS - Global variables don't update the UI
+global ITEM_CHOICES, ITEM_CHOICES_ARGS
+ITEM_CHOICES = choices_names
+ITEM_CHOICES_ARGS = []
+```
+
+**✅ CORRECT - Use _update_option_choices Method:**
+```python
+# DO THIS - Updates the Options trait directly
+self._update_option_choices("selected_item", choices_names, selected_value)
+```
+
+**Why This Matters:**
+- Global variables (`ITEM_CHOICES`) are only used during parameter initialization
+- The dropdown UI is controlled by the `Options` trait on the parameter
+- `_update_option_choices()` directly updates the `Options` trait, which updates the UI
+- This is the same pattern used in `flow_list_projects.py` and other working nodes
+
+#### **Key Benefits of This Pattern:**
+
+1. **🚀 Fast Selection**: No API calls when switching items (uses cached data)
+2. **🎯 Targeted Refresh**: Only updates what changed (efficient API usage)
+3. **🔄 Smart Caching**: Maintains full dataset while allowing individual updates
+4. **🧠 Selection Persistence**: Preserves user selections across reloads
+5. **📱 Intuitive UX**: Standard "run node → get results" workflow
+6. **⚡ Efficient**: Minimal API calls, maximum responsiveness
+
+#### **Required Imports:**
+
+```python
+from griptape_nodes.retained_mode.events.parameter_events import SetParameterValueRequest
+from griptape_nodes.retained_mode.griptape_nodes import GriptapeNodes, logger
+```
+
+#### **SetParameterValueRequest Pattern:**
+
+Always use this three-step pattern for parameter updates:
+
+```python
+# 1. SetParameterValueRequest for proper UI updates
+GriptapeNodes.handle_request(
+    SetParameterValueRequest(parameter_name=param_name, value=value, node_name=self.name)
+)
+
+# 2. Update parameter_output_values for downstream nodes
+self.parameter_output_values[param_name] = value
+
+# 3. Publish updates to trigger UI updates
+self.publish_update_to_parameter(param_name, value)
+```
+
+#### **When to Use This Pattern:**
+
+- ✅ **List/Select Nodes**: When users need to choose from a collection
+- ✅ **Data Refresh**: When individual items might change frequently
+- ✅ **Large Datasets**: When loading all data upfront is acceptable
+- ✅ **User Selection**: When preserving user choices is important
+- ✅ **Efficient Updates**: When you want to minimize API calls
+
+#### **Examples in Codebase:**
+
+- `flow_list_projects.py` - Projects with refresh
+- `flow_list_assets.py` - Assets with refresh  
+- `flow_list_tasks.py` - Tasks with refresh
+
+#### **🔧 Troubleshooting: Dropdown Not Updating**
+
+**Symptoms:**
+- Running the node updates `all_items` but dropdown shows old choices
+- Dropdown shows "Load items to see options" even after successful API call
+- Selection works but choices don't refresh
+
+**Common Causes:**
+1. **Using global variables instead of `_update_option_choices()`**
+   ```python
+   # ❌ This won't update the UI
+   global ITEM_CHOICES
+   ITEM_CHOICES = choices_names
+   
+   # ✅ This will update the UI
+   self._update_option_choices("selected_item", choices_names, selected_value)
+   ```
+
+2. **Missing `_update_option_choices()` call in process method**
+   ```python
+   # ❌ Missing this line
+   self._update_option_choices("selected_item", choices_names, selected_value)
+   ```
+
+3. **Incorrect parameter name in `_update_option_choices()`**
+   ```python
+   # ❌ Wrong parameter name
+   self._update_option_choices("selected_items", choices_names, selected_value)
+   
+   # ✅ Correct parameter name
+   self._update_option_choices("selected_item", choices_names, selected_value)
+   ```
+
+**Quick Fix Checklist:**
+- [ ] Using `_update_option_choices()` not global variables
+- [ ] Calling `_update_option_choices()` in process method
+- [ ] Parameter name matches exactly
+- [ ] Choices list is not empty
+- [ ] Selected value is in the choices list
+
+#### **🚨 CRITICAL: Parameter Type and Data Structure Issues**
+
+**❌ WRONG - Using ParameterString with ui_options:**
+```python
+# DON'T DO THIS - ParameterString doesn't work with _update_option_choices
+ParameterString(
+    name="selected_item",
+    allow_property=True,
+    ui_options={
+        "display_name": "Select Item",
+        "data": ITEM_CHOICES_ARGS,  # This interferes with dropdown updates!
+        "icon_size": "medium",
+    },
+    traits={Options(choices=ITEM_CHOICES)}
+)
+```
+
+**✅ CORRECT - Use Parameter with allowed_modes:**
+```python
+# DO THIS - Parameter works with _update_option_choices
+Parameter(
+    name="selected_item",
+    type="string",
+    allowed_modes={ParameterMode.PROPERTY},
+    traits={Options(choices=ITEM_CHOICES)}
+)
+```
+
+**Why This Matters:**
+- `_update_option_choices()` is designed for the base `Parameter` class, not specialized types like `ParameterString`
+- `ui_options` with `data` can interfere with dropdown updates
+- `allowed_modes={ParameterMode.PROPERTY}` is the correct pattern for dropdown parameters
+
+#### **🚨 CRITICAL: Data Structure Mismatch in Selection Updates**
+
+**The Problem:**
+When `after_value_set` calls `_update_selected_item_data()`, it passes data from `all_items` (processed structure), but the method expects raw API data structure.
+
+**❌ WRONG - Expecting raw API structure:**
+```python
+def _update_selected_item_data(self, item_data: dict) -> None:
+    # This expects raw ShotGrid API structure
+    attributes = item_data.get("attributes", {})
+    item_name = attributes.get("name", f"Item {item_id}")
+    item_description = attributes.get("description", "")
+```
+
+**✅ CORRECT - Handle processed data structure:**
+```python
+def _update_selected_item_data(self, item_data: dict) -> None:
+    # This works with processed all_items structure
+    item_name = item_data.get("name", f"Item {item_id}")
+    item_description = item_data.get("description", "")
+```
+
+**Data Structure Patterns:**
+
+**Raw ShotGrid API Response:**
+```json
+{
+  "id": 123,
+  "attributes": {
+    "name": "Item Name",
+    "code": "ITEM_CODE", 
+    "description": "Description"
+  }
+}
+```
+
+**Processed all_items Structure:**
+```json
+{
+  "id": 123,
+  "name": "Item Name",
+  "code": "ITEM_CODE",
+  "description": "Description"
+}
+```
+
+**Key Learning:**
+- `all_items` contains processed/flattened data structure
+- `_update_selected_item_data()` must work with processed structure
+- Raw API data is only used during initial fetch and single item refresh
+
+#### **🔍 Debugging Process for Dropdown Issues**
+
+**Step 1: Verify Dropdown Updates**
+- Check if `_update_option_choices()` is being called
+- Verify parameter name matches exactly
+- Confirm choices list is not empty
+
+**Step 2: Check Parameter Definition**
+- Use `Parameter` not `ParameterString` for dropdowns
+- Use `allowed_modes={ParameterMode.PROPERTY}` not `allow_property=True`
+- Avoid `ui_options` with `data` that might interfere
+
+**Step 3: Verify Data Structure Consistency**
+- Check if `_update_selected_item_data()` expects the right data structure
+- Raw API data: `item.get("attributes", {}).get("name")`
+- Processed data: `item.get("name")`
+- `all_items` contains processed data, not raw API data
+
+**Step 4: Test Selection Updates**
+- Verify `after_value_set` is called when dropdown changes
+- Check if selection matching logic works correctly
+- Ensure `_update_selected_item_data()` is called with correct data
+
+**Common Debugging Questions:**
+1. "Is the dropdown updating?" → Check `_update_option_choices()` usage
+2. "Are selections working?" → Check parameter type and data structure
+3. "Are details updating?" → Check `_update_selected_item_data()` data structure handling
+
 ## 🎯 **Success Criteria:**
 
 - [ ] API calls work with curl/httpx
@@ -656,12 +1130,65 @@ def _create_fallback_image(self, text: str, width: int = 200, height: int = 150)
 - [ ] Output parameters provide useful data
 - [ ] Error handling is graceful with fallbacks
 - [ ] Process is documented for future reference
+- [ ] **Dynamic data management pattern is implemented correctly**
+- [ ] **SetParameterValueRequest is used for all parameter updates**
+- [ ] **Process loads all data, selection uses cache, refresh updates selected item**
 
 ## 📚 **Resources:**
 
 - [ShotGrid API Documentation](https://developer.shotgridsoftware.com/rest-api/)
 - [ShotGrid Python API](https://github.com/shotgunsoftware/python-api)
 - [Griptape Nodes Documentation](https://docs.griptape.ai/)
+
+## 🔧 **ShotGrid API Reference - Postman Collection:**
+
+### **Using the ShotGrid REST API v1.x Postman Collection**
+
+The project includes a comprehensive Postman collection that contains all ShotGrid REST API endpoints with examples:
+
+**Location**: `GriptapeNodes/libraries/griptape-nodes-library-flow-production-tracking/ShotGrid REST API v1.x.postman_collection.json`
+
+### **How to Use the Postman Collection:**
+
+1. **Import into Postman**: Load the JSON file into Postman to explore all available endpoints
+2. **Find Specific Endpoints**: Search for keywords like "upload", "create", "update" to find relevant APIs
+3. **Check Request/Response Examples**: Each endpoint includes example requests and responses
+4. **Understand Parameters**: See exactly what query parameters and body fields are required
+
+### **Key Benefits:**
+
+- **Exact Endpoint URLs**: No guessing about API structure
+- **Parameter Examples**: See real examples of required fields
+- **Response Formats**: Understand the exact JSON structure returned
+- **Authentication Patterns**: See how different auth methods work
+- **Error Examples**: Understand common error responses
+
+### **Example: Finding Upload Endpoints**
+
+```bash
+# Search the Postman collection for upload patterns
+grep -i "_upload" "ShotGrid REST API v1.x.postman_collection.json"
+
+# This reveals the exact API structure:
+# GET /api/v1/entity/:entity/:record_id/_upload?filename=<string>
+# PUT /api/v1/entity/:entity/:record_id/_upload?filename=<string>&signature=<string>
+# POST /api/v1/entity/:entity/:record_id/_upload?filename=<string>
+```
+
+### **When to Reference the Postman Collection:**
+
+- ✅ **New Feature Development**: Before implementing any ShotGrid API calls
+- ✅ **Debugging API Issues**: When endpoints return unexpected errors
+- ✅ **Understanding Response Structure**: To parse API responses correctly
+- ✅ **Finding Required Parameters**: To ensure all required fields are included
+- ✅ **Testing API Changes**: To verify endpoint behavior before coding
+
+### **Pro Tips:**
+
+1. **Search by Feature**: Use `grep` to find all endpoints related to a specific feature
+2. **Check Examples**: Look at the example request/response bodies for data structure
+3. **Verify Parameters**: Ensure you're using the correct query parameters and field names
+4. **Test First**: Use Postman to test endpoints before implementing in code
 
 ______________________________________________________________________
 

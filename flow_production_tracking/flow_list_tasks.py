@@ -53,25 +53,7 @@ class FlowListTasks(BaseShotGridNode):
                 placeholder_text="The type of the entity to list tasks for (Project, Asset, Shot, etc.). For projects, this will list all tasks in the project.",
                 traits={
                     Options(choices=ENTITY_TYPES),
-                    Button(
-                        icon="list-restart",
-                        size="icon",
-                        variant="secondary",
-                        on_click=self._reload_tasks,
-                        full_width=True,
-                        label="Reload Tasks",
-                    ),
                 },
-            )
-        )
-        self.add_parameter(
-            ParameterString(
-                name="entity_url",
-                default_value="",
-                allow_input=False,
-                tooltip="The URL to view the entity in ShotGrid.",
-                placeholder_text="The URL to view the entity in ShotGrid.",
-                allowed_modes={ParameterMode.OUTPUT},
             )
         )
 
@@ -91,33 +73,19 @@ class FlowListTasks(BaseShotGridNode):
             Parameter(
                 name="selected_task",
                 type="string",
-                default_value="No tasks available",
-                tooltip="Select a task from the list.",
+                default_value="Load tasks to see options",
+                tooltip="Select a task from the list. Use refresh button to update selected task data.",
                 allowed_modes={ParameterMode.PROPERTY},
-                ui_options={
-                    "display_name": "Select Task",
-                    "icon_size": "medium",
-                },
                 traits={
                     Options(choices=TASK_CHOICES),
                     Button(
                         icon="refresh-cw",
-                        size="icon",
                         variant="secondary",
                         on_click=self._refresh_selected_task,
+                        label="Refresh Selected",
+                        full_width=True,
                     ),
                 },
-            )
-        )
-
-        self.add_parameter(
-            Parameter(
-                name="selected_task_data",
-                type="json",
-                default_value={},
-                allowed_modes={ParameterMode.OUTPUT},
-                tooltip="Complete data for the selected task",
-                ui_options={"hide_property": True},
             )
         )
 
@@ -127,15 +95,6 @@ class FlowListTasks(BaseShotGridNode):
                 name="task_url",
                 default_value="",
                 tooltip="URL to view the task in ShotGrid",
-                allowed_modes={ParameterMode.OUTPUT},
-            )
-        )
-        self.add_parameter(
-            Parameter(
-                name="task_id",
-                type="str",
-                default_value="",
-                tooltip="ID of the selected task",
                 allowed_modes={ParameterMode.OUTPUT},
             )
         )
@@ -153,6 +112,7 @@ class FlowListTasks(BaseShotGridNode):
                 default_value="",
                 tooltip="Pipeline step for the selected task",
                 allowed_modes={ParameterMode.OUTPUT},
+                placeholder_text="Pipeline step for the selected task",
             )
         )
         self.add_parameter(
@@ -209,10 +169,39 @@ class FlowListTasks(BaseShotGridNode):
                 placeholder_text="Description of the selected task",
             )
         )
+        self.add_parameter(
+            ParameterString(
+                name="entity_url",
+                default_value="",
+                allow_input=False,
+                tooltip="The URL to view the entity in ShotGrid.",
+                placeholder_text="The URL to view the entity in ShotGrid.",
+                allowed_modes={ParameterMode.OUTPUT},
+            )
+        )
+        self.add_parameter(
+            Parameter(
+                name="task_id",
+                type="str",
+                default_value="",
+                tooltip="ID of the selected task",
+                allowed_modes={ParameterMode.OUTPUT},
+            )
+        )
+        self.add_parameter(
+            Parameter(
+                name="task_data",
+                type="json",
+                default_value={},
+                allowed_modes={ParameterMode.OUTPUT},
+                tooltip="Complete data for the selected task",
+                ui_options={"hide_property": True},
+            )
+        )
 
         # Set initial values
         self.parameter_values["selected_task"] = ""
-        self.parameter_values["selected_task_data"] = {}
+        self.parameter_values["task_data"] = {}
         self.parameter_values["all_tasks"] = []
 
     def after_value_set(self, parameter: Parameter, value: Any) -> None:
@@ -237,9 +226,27 @@ class FlowListTasks(BaseShotGridNode):
                 logger.warning(f"{self.name}: Invalid entity_id value: {e}")
             except Exception as e:
                 logger.warning(f"{self.name}: Failed to update entity_url for entity type {value}: {e}")
-        elif parameter.name == "selected_task" and value and value != "No tasks available":
+        elif parameter.name == "selected_task" and value and value != "Load tasks to see options":
             # Update selected task data when a task is selected
-            self._update_selected_task_data(value)
+            self.publish_update_to_parameter("selected_task", value)
+            if value and value != "Load tasks to see options":
+                # Find the index of the selected task by matching display names
+                tasks = self.get_parameter_value("all_tasks") or []
+                selected_index = 0
+
+                # Clean the selection to match against task names
+                clean_selection = value.replace("📋 ", "").replace(" (Template)", "")
+
+                for i, task in enumerate(tasks):
+                    task_name = task.get("content", "")
+                    if task_name == clean_selection:
+                        selected_index = i
+                        break
+
+                self._update_selected_task_data_from_processed(
+                    tasks[selected_index] if selected_index < len(tasks) else {}
+                )
+        return super().after_value_set(parameter, value)
 
     def _reload_tasks(self, button: Button, button_details: ButtonDetailsMessagePayload) -> None:  # noqa: ARG002
         """Reload all tasks when button is clicked."""
@@ -247,128 +254,143 @@ class FlowListTasks(BaseShotGridNode):
 
     def _refresh_selected_task(self, button: Button, button_details: ButtonDetailsMessagePayload) -> None:  # noqa: ARG002
         """Refresh the currently selected task information."""
-        self._load_selected_task()
-
-    def _load_tasks(self) -> None:
-        """Load tasks based on current parameters."""
         try:
-            entity_id = self.get_parameter_value("entity_id")
-            entity_type = self.get_parameter_value("entity_type")
-
-            if not entity_id:
-                logger.warning(f"{self.name}: No entity ID provided")
-                self._update_option_choices("selected_task", ["No tasks available"], "No tasks available")
-                return
-
-            if not entity_type:
-                logger.warning(f"{self.name}: No entity type selected")
-                self._update_option_choices("selected_task", ["No tasks available"], "No tasks available")
-                return
-
-            # Convert entity_id to integer
-            try:
-                entity_id = int(entity_id)
-            except (ValueError, TypeError):
-                logger.error(f"{self.name}: entity_id must be a valid integer")
-                return
-
-            # Get access token and base URL
-            access_token = self._get_access_token()
-            base_url = self._get_shotgrid_config()["base_url"]
-
-            # Verify the entity exists and get project info
-            entity_info = self._get_entity_info(entity_id, access_token, base_url)
-            if not entity_info:
-                logger.error(f"{self.name}: Could not find entity with ID {entity_id}")
-                self._update_option_choices("selected_task", ["No tasks available"], "No tasks available")
-                return
-
-            # Verify the entity type matches what was found
-            discovered_type = entity_info["type"]
-            if discovered_type != entity_type:
-                logger.warning(
-                    f"{self.name}: Entity type mismatch. Expected {entity_type}, but found {discovered_type}"
-                )
-                # Use the discovered type instead of the selected one
-                entity_type = discovered_type
-
-            project_id = entity_info["project_id"]
-
-            # Update the entity URL
-            self._update_entity_url(entity_id, entity_type)
-
-            # Get tasks for the entity
-            tasks = self._get_tasks_for_entity(entity_type, entity_id, access_token, base_url)
-
-            if tasks:
-                self._populate_task_choices(tasks)
-            else:
-                self._update_option_choices("selected_task", ["No tasks available"], "No tasks available")
-                self.parameter_values["all_tasks"] = []
-                self.parameter_values["selected_task"] = "No tasks available"
-                self.parameter_values["selected_task_data"] = {}
-
-        except Exception as e:
-            logger.error(f"{self.name}: Failed to load tasks: {e}")
-            self._update_option_choices("selected_task", ["No tasks available"], "No tasks available")
-
-    def _load_selected_task(self) -> None:
-        """Load/refresh the currently selected task information."""
-        try:
-            selected_task_name = self.get_parameter_value("selected_task")
-            if not selected_task_name or selected_task_name == "No tasks available":
+            current_selection = self.get_parameter_value("selected_task")
+            if not current_selection or current_selection == "Load tasks to see options":
                 logger.warning(f"{self.name}: No task selected to refresh")
                 return
 
-            entity_id = self.get_parameter_value("entity_id")
-            entity_type = self.get_parameter_value("entity_type")
+            # Clean the selection to get the actual task name
+            clean_selection = current_selection.replace("📋 ", "").replace(" (Template)", "")
 
-            if not entity_id or not entity_type:
-                logger.warning(f"{self.name}: Missing entity_id or entity_type for task refresh")
-                return
+            # Get the current task ID from all_tasks
+            tasks = self.get_parameter_value("all_tasks") or []
+            selected_task_id = None
+            selected_index = 0
 
-            # Convert entity_id to integer
-            try:
-                entity_id = int(entity_id)
-            except (ValueError, TypeError):
-                logger.error(f"{self.name}: entity_id must be a valid integer")
-                return
-
-            # Get access token and base URL
-            access_token = self._get_access_token()
-            base_url = self._get_shotgrid_config()["base_url"]
-
-            # Find the task ID for the selected task display name
-            # selected_task_name is in format "task_id: task_name"
-            task_id = None
-            for choice in TASK_CHOICES_ARGS:
-                expected_display = f"{choice['task_id']}: {choice['content']}"
-                if expected_display == selected_task_name:
-                    task_id = choice["task_id"]
+            for i, task in enumerate(tasks):
+                task_name = task.get("content", "")
+                if task_name == clean_selection:
+                    selected_task_id = task.get("id")
+                    selected_index = i
                     break
 
-            if not task_id:
-                logger.warning(f"{self.name}: Could not find task ID for selected task: {selected_task_name}")
+            if not selected_task_id:
+                logger.warning(f"{self.name}: Could not find task ID for '{clean_selection}'")
                 return
 
-            # Fetch the updated task data
-            updated_task_data = self._fetch_single_task(task_id, access_token, base_url)
-            if not updated_task_data:
-                logger.warning(f"{self.name}: Could not fetch updated data for task {task_id}")
+            # Fetch fresh data for this specific task
+            logger.info(f"{self.name}: Refreshing task {selected_task_id} ({clean_selection})")
+            fresh_task_data = self._fetch_single_task(
+                selected_task_id, self._get_access_token(), self._get_shotgrid_config()["base_url"]
+            )
+
+            if not fresh_task_data:
+                logger.warning(f"{self.name}: Failed to fetch fresh data for task {selected_task_id}")
                 return
 
-            # Update the task in all_tasks
-            self._update_task_in_all_tasks(task_id, updated_task_data)
+            # Update the task in all_tasks using SetParameterValueRequest
+            tasks[selected_index] = fresh_task_data
+            GriptapeNodes.handle_request(
+                SetParameterValueRequest(parameter_name="all_tasks", value=tasks, node_name=self.name)
+            )
+            self.parameter_output_values["all_tasks"] = tasks
+            self.publish_update_to_parameter("all_tasks", tasks)
 
-            # Update the selected task data and all parameters
-            self.parameter_values["selected_task_data"] = updated_task_data
-            self.parameter_output_values["selected_task_data"] = updated_task_data
-            self._populate_task_details(updated_task_data)
+            # Update the task data display
+            self._update_selected_task_data_from_processed(fresh_task_data)
 
-            logger.info(f"{self.name}: Refreshed task {selected_task_name} (ID: {task_id})")
+            logger.info(f"{self.name}: Successfully refreshed task {selected_task_id}")
 
         except Exception as e:
             logger.error(f"{self.name}: Failed to refresh selected task: {e}")
+        return
+
+    def _process_tasks_to_choices(self, tasks: list[dict]) -> tuple[list[dict], list[str]]:
+        """Process raw tasks data into choices format."""
+        task_list = []
+        choices_names = []
+
+        for task in tasks:
+            # Safely extract attributes and relationships with null checks
+            attributes = task.get("attributes") or {}
+            relationships = task.get("relationships") or {}
+
+            # Safely extract nested data
+            step_data = relationships.get("step", {}) or {}
+            step_name = step_data.get("data", {}) or {}
+
+            task_assignees_data = relationships.get("task_assignees", {}) or {}
+
+            entity_data = relationships.get("entity", {}) or {}
+            project_data = relationships.get("project", {}) or {}
+
+            task_data = {
+                "id": task.get("id"),
+                "content": attributes.get("content"),
+                "sg_status_list": attributes.get("sg_status_list"),
+                "step": step_name.get("name"),
+                "task_assignees": task_assignees_data.get("data", []),
+                "sg_priority": attributes.get("sg_priority"),
+                "sg_start_date": attributes.get("sg_start_date"),
+                "sg_due_date": attributes.get("sg_due_date"),
+                "sg_description": attributes.get("sg_description"),
+                "entity": entity_data.get("data", {}),
+                "project": project_data.get("data", {}),
+            }
+            task_list.append(task_data)
+
+            # Create choice for the dropdown - just use task content
+            task_content = task_data["content"] or f"Task {task_data['id']}"
+            choices_names.append(task_content)
+
+        return task_list, choices_names
+
+    def _update_selected_task_data_from_processed(self, task_data: dict) -> None:
+        """Update task outputs based on selected task data (processed structure)."""
+        if not task_data:
+            return
+
+        # Extract basic task info (from processed data structure)
+        task_id = task_data.get("id", "")
+        task_content = task_data.get("content", f"Task {task_id}")
+        step_name = task_data.get("step", "")
+        status = task_data.get("sg_status_list", "")
+        assignees = task_data.get("task_assignees", [])
+        assigned_to = ", ".join([assignee.get("name", "") for assignee in assignees if assignee.get("name")])
+        priority = task_data.get("sg_priority", "")
+        start_date = task_data.get("sg_start_date", "")
+        due_date = task_data.get("sg_due_date", "")
+        description = task_data.get("sg_description", "")
+
+        # Generate web UI URL
+        try:
+            base_url = self._get_shotgrid_config()["base_url"]
+            task_url = f"{base_url.rstrip('/')}/detail/Task/{task_id}"
+        except Exception:
+            task_url = f"https://shotgrid.autodesk.com/detail/Task/{task_id}"
+
+        # Update all task parameters using SetParameterValueRequest
+        params = {
+            "task_url": task_url,
+            "task_id": str(task_id),
+            "task_name": task_content,
+            "pipeline_step": step_name,
+            "status": status,
+            "assigned_to": assigned_to,
+            "priority": priority,
+            "start_date": start_date,
+            "due_date": due_date,
+            "description": description,
+            "task_data": task_data,
+        }
+
+        for param_name, value in params.items():
+            GriptapeNodes.handle_request(
+                SetParameterValueRequest(parameter_name=param_name, value=value, node_name=self.name)
+            )
+            self.parameter_output_values[param_name] = value
+            self.publish_update_to_parameter(param_name, value)
 
     def _fetch_single_task(self, task_id: int, access_token: str, base_url: str) -> dict | None:
         """Fetch a single task by ID."""
@@ -383,7 +405,37 @@ class FlowListTasks(BaseShotGridNode):
                 response = client.get(url, headers=headers, params=params)
                 if response.status_code == 200:
                     data = response.json()
-                    return data.get("data")
+                    task_data = data.get("data")
+
+                    if task_data:
+                        # Safely extract attributes and relationships with null checks
+                        attributes = task_data.get("attributes") or {}
+                        relationships = task_data.get("relationships") or {}
+
+                        # Safely extract nested data
+                        step_data = relationships.get("step", {}) or {}
+                        step_name = step_data.get("data", {}) or {}
+
+                        task_assignees_data = relationships.get("task_assignees", {}) or {}
+
+                        entity_data = relationships.get("entity", {}) or {}
+                        project_data = relationships.get("project", {}) or {}
+
+                        # Process the task data to match our processed structure
+                        processed_task = {
+                            "id": task_data.get("id"),
+                            "content": attributes.get("content"),
+                            "sg_status_list": attributes.get("sg_status_list"),
+                            "step": step_name.get("name"),
+                            "task_assignees": task_assignees_data.get("data", []),
+                            "sg_priority": attributes.get("sg_priority"),
+                            "sg_start_date": attributes.get("sg_start_date"),
+                            "sg_due_date": attributes.get("sg_due_date"),
+                            "sg_description": attributes.get("sg_description"),
+                            "entity": entity_data.get("data", {}),
+                            "project": project_data.get("data", {}),
+                        }
+                        return processed_task
 
                 logger.warning(f"{self.name}: Failed to fetch task {task_id}: {response.status_code}")
                 return None
@@ -391,280 +443,6 @@ class FlowListTasks(BaseShotGridNode):
         except Exception as e:
             logger.error(f"{self.name}: Error fetching task {task_id}: {e}")
             return None
-
-    def _update_task_in_all_tasks(self, task_id: int, updated_task_data: dict) -> None:
-        """Update a specific task in the all_tasks list and refresh dropdown choices."""
-        try:
-            all_tasks = self.get_parameter_value("all_tasks") or []
-            for i, task in enumerate(all_tasks):
-                if task.get("id") == task_id:
-                    all_tasks[i] = updated_task_data
-                    break
-
-            # Update the parameter values
-            self.parameter_values["all_tasks"] = all_tasks
-            self.parameter_output_values["all_tasks"] = all_tasks
-
-            # Update the global TASK_CHOICES_ARGS and TASK_CHOICES
-            global TASK_CHOICES, TASK_CHOICES_ARGS
-            for i, choice in enumerate(TASK_CHOICES_ARGS):
-                if choice["task_id"] == task_id:
-                    # Update the choice data
-                    choice["full_task_data"] = updated_task_data
-                    choice["content"] = updated_task_data.get("attributes", {}).get("content", choice["content"])
-
-                    # Update the display name in TASK_CHOICES (task_id: task_name format)
-                    if i < len(TASK_CHOICES):
-                        TASK_CHOICES[i] = f"{choice['task_id']}: {choice['content']}"
-                    break
-
-            # Refresh the dropdown choices to reflect the updated data
-            self._refresh_dropdown_choices()
-
-            logger.info(f"{self.name}: Updated task {task_id} in all_tasks list and refreshed dropdown")
-
-        except Exception as e:
-            logger.error(f"{self.name}: Failed to update task in all_tasks: {e}")
-
-    def _refresh_dropdown_choices(self) -> None:
-        """Refresh the dropdown choices with current TASK_CHOICES data."""
-        try:
-            # Get the current selection to preserve it
-            current_selection = self.get_parameter_value("selected_task")
-
-            # Update the dropdown choices
-            self._update_option_choices("selected_task", TASK_CHOICES, current_selection)
-
-            # Update the UI options data
-            task_param = self.get_parameter_by_name("selected_task")
-            if task_param:
-                task_ui_options = task_param.ui_options
-                task_ui_options["data"] = TASK_CHOICES_ARGS
-                task_param.ui_options = task_ui_options
-
-            logger.info(f"{self.name}: Refreshed dropdown choices")
-
-        except Exception as e:
-            logger.error(f"{self.name}: Failed to refresh dropdown choices: {e}")
-
-    def _populate_task_choices(self, tasks: list[dict]) -> None:
-        """Populate the task choices based on the loaded tasks."""
-        global TASK_CHOICES, TASK_CHOICES_ARGS
-
-        choices_args = []
-        choices_names = []
-
-        for task in tasks:
-            task_id = task.get("id")
-            attrs = task.get("attributes", {})
-            content = attrs.get("content", f"Task {task_id}")
-
-            # Create display name - task_id: task_name format
-            display_name = f"{task_id}: {content}"
-
-            # Create choice data
-            choice = {
-                "task_id": task_id,
-                "content": content,
-                "full_task_data": task,
-            }
-
-            choices_args.append(choice)
-            choices_names.append(display_name)
-
-        # Update global choices
-        TASK_CHOICES = choices_names
-        TASK_CHOICES_ARGS = choices_args
-
-        # Update the parameter choices
-        self._update_option_choices(
-            "selected_task", choices_names, choices_names[0] if choices_names else "No tasks available"
-        )
-
-        # Output the tasks
-        self.parameter_output_values["all_tasks"] = tasks
-
-        # If we have tasks, automatically select the first one and set its data
-        if choices_args:
-            first_task_display = choices_args[0]["content"]  # This is just the task name
-            first_task_id = choices_args[0]["task_id"]
-            first_display_name = f"{first_task_id}: {first_task_display}"
-
-            self.parameter_values["selected_task"] = first_display_name
-            self.parameter_output_values["selected_task_data"] = choices_args[0]["full_task_data"]
-            # Update all task detail parameters
-            self._update_selected_task_data(first_display_name)
-            logger.info(f"{self.name}: Auto-selected first task {first_display_name}")
-
-        logger.info(f"{self.name}: Retrieved {len(tasks)} tasks")
-
-        # Return None since this is a void method
-
-    def _update_global_choices(self, choices_args: list[dict], choices_names: list[str]) -> None:
-        """Update global choice variables."""
-        global TASK_CHOICES, TASK_CHOICES_ARGS
-        TASK_CHOICES = choices_names
-        TASK_CHOICES_ARGS = choices_args
-
-    def _update_selected_task_data(self, selected_task_display: str) -> None:
-        """Update the selected task data when a task is selected."""
-        try:
-            # Find the task data for the selected task
-            # selected_task_display is in format "task_id: task_name"
-            task_data = {}
-            for choice in TASK_CHOICES_ARGS:
-                # Check if the display name matches (task_id: task_name format)
-                expected_display = f"{choice['task_id']}: {choice['content']}"
-                if expected_display == selected_task_display:
-                    task_data = choice["full_task_data"]
-                    break
-
-            if task_data:
-                # Set both parameter_values and parameter_output_values
-                self.parameter_values["selected_task_data"] = task_data
-                self.parameter_output_values["selected_task_data"] = task_data
-
-                # Extract task details from the task data
-                self._populate_task_details(task_data)
-
-                logger.info(f"{self.name}: Updated selected task data for task {selected_task_display}")
-            else:
-                logger.warning(f"{self.name}: Could not find task data for selected task {selected_task_display}")
-                # Clear the output if no task data found
-                self.parameter_output_values["selected_task_data"] = {}
-                self._clear_task_details()
-
-        except Exception as e:
-            logger.error(f"{self.name}: Failed to update selected task data: {e}")
-            # Clear the output on error
-            self.parameter_output_values["selected_task_data"] = {}
-            self._clear_task_details()
-
-    def _populate_task_details(self, task_data: dict) -> None:
-        """Populate all task detail parameters from task data."""
-        try:
-            # Extract basic task info
-            task_id = task_data.get("id", "")
-            attributes = task_data.get("attributes", {})
-            relationships = task_data.get("relationships", {})
-            links = task_data.get("links", {})
-
-            # Extract individual task details
-            task_url = self._extract_task_url(links)
-            task_name = attributes.get("content", "")
-            pipeline_step = self._extract_pipeline_step(relationships)
-            status = attributes.get("sg_status_list", "")
-            assigned_to = self._extract_assigned_to(relationships)
-
-            # Try different field names for priority, dates, and description
-            priority = self._extract_field_value(attributes, ["sg_priority", "priority", "sg_priority_list"])
-            start_date = self._extract_field_value(attributes, ["sg_start_date", "start_date", "sg_start"])
-            due_date = self._extract_field_value(attributes, ["sg_due_date", "due_date", "sg_due"])
-            description = self._extract_field_value(attributes, ["sg_description", "description", "sg_desc"])
-
-            # Update all parameters
-            self._update_task_parameters(
-                task_url,
-                str(task_id),
-                task_name,
-                pipeline_step,
-                status,
-                assigned_to,
-                priority,
-                start_date,
-                due_date,
-                description,
-            )
-
-        except Exception as e:
-            logger.error(f"{self.name}: Failed to populate task details: {e}")
-
-    def _extract_task_url(self, links: dict) -> str:
-        """Extract task URL from links."""
-        if "self" in links:
-            api_url = links["self"]
-            if "/api/v1/entity/tasks/" in api_url:
-                task_id_from_url = api_url.split("/api/v1/entity/tasks/")[1].split("/")[0]
-                base_url = self._get_shotgrid_config()["base_url"]
-                return f"{base_url}detail/Task/{task_id_from_url}"
-        return ""
-
-    def _extract_pipeline_step(self, relationships: dict) -> str:
-        """Extract pipeline step from relationships."""
-        step_data = relationships.get("step", {}).get("data", {})
-        return step_data.get("name", "") if step_data else ""
-
-    def _extract_assigned_to(self, relationships: dict) -> str:
-        """Extract assigned to from relationships."""
-        assignees_data = relationships.get("task_assignees", {}).get("data", [])
-        return ", ".join([assignee.get("name", "") for assignee in assignees_data if assignee.get("name")])
-
-    def _extract_field_value(self, attributes: dict, field_names: list[str]) -> str:
-        """Try to extract a field value using multiple possible field names."""
-        for field_name in field_names:
-            value = attributes.get(field_name)
-            if value is not None and value != "":
-                return str(value)
-        return ""
-
-    def _update_task_parameters(
-        self,
-        task_url: str,
-        task_id: str,
-        task_name: str,
-        pipeline_step: str,
-        status: str,
-        assigned_to: str,
-        priority: str,
-        start_date: str,
-        due_date: str,
-        description: str,
-    ) -> None:
-        """Update all task parameters using SetParameterValueRequest for proper UI updates."""
-        params = {
-            "task_url": task_url,
-            "task_id": task_id,
-            "task_name": task_name,
-            "pipeline_step": pipeline_step,
-            "status": status,
-            "assigned_to": assigned_to,
-            "priority": priority,
-            "start_date": start_date,
-            "due_date": due_date,
-            "description": description,
-        }
-
-        # Use SetParameterValueRequest for each parameter to ensure proper UI updates
-        for param_name, value in params.items():
-            GriptapeNodes.handle_request(
-                SetParameterValueRequest(parameter_name=param_name, value=value, node_name=self.name)
-            )
-            # Also update parameter_output_values for downstream nodes
-            self.parameter_output_values[param_name] = value
-            # Publish updates to trigger UI updates
-            self.publish_update_to_parameter(param_name, value)
-
-    def _clear_task_details(self) -> None:
-        """Clear all task detail parameters using SetParameterValueRequest for proper UI updates."""
-        empty_params = [
-            "task_url",
-            "task_id",
-            "task_name",
-            "pipeline_step",
-            "status",
-            "assigned_to",
-            "priority",
-            "start_date",
-            "due_date",
-            "description",
-        ]
-
-        for param_name in empty_params:
-            GriptapeNodes.handle_request(
-                SetParameterValueRequest(parameter_name=param_name, value="", node_name=self.name)
-            )
-            self.parameter_output_values[param_name] = ""
-            self.publish_update_to_parameter(param_name, "")
 
     def _get_entity_info(self, entity_id: int, access_token: str, base_url: str) -> dict | None:
         """Get entity information by querying entity endpoints directly."""
@@ -777,6 +555,84 @@ class FlowListTasks(BaseShotGridNode):
             return []
 
     def process(self) -> None:
-        """Process the node - tasks are only loaded when user clicks the reload button."""
+        """Process the node - automatically load tasks when run."""
+        try:
+            # Get current selection to preserve it
+            current_selection = self.get_parameter_value("selected_task")
 
-        # Do nothing - tasks are only loaded when user clicks the reload button
+            # Get input parameters
+            entity_id = self.get_parameter_value("entity_id")
+            entity_type = self.get_parameter_value("entity_type")
+
+            if not entity_id:
+                logger.warning(f"{self.name}: entity_id is required")
+                self._update_option_choices("selected_task", ["No entity selected"], "No entity selected")
+                return
+
+            if not entity_type:
+                logger.warning(f"{self.name}: entity_type is required")
+                self._update_option_choices("selected_task", ["No entity type selected"], "No entity type selected")
+                return
+
+            # Convert entity_id to integer
+            try:
+                entity_id = int(entity_id)
+            except (ValueError, TypeError):
+                logger.error(f"{self.name}: entity_id must be a valid integer")
+                self._update_option_choices("selected_task", ["Invalid entity ID"], "Invalid entity ID")
+                return
+
+            # Load tasks from ShotGrid
+            logger.info(f"{self.name}: Loading tasks from ShotGrid for {entity_type} {entity_id}...")
+            tasks = self._get_tasks_for_entity(
+                entity_type, entity_id, self._get_access_token(), self._get_shotgrid_config()["base_url"]
+            )
+
+            if not tasks:
+                logger.warning(f"{self.name}: No tasks found for {entity_type} {entity_id}")
+                self._update_option_choices("selected_task", ["No tasks available"], "No tasks available")
+                return
+
+            # Process tasks to choices
+            task_list, choices_names = self._process_tasks_to_choices(tasks)
+
+            # Store all tasks data first using SetParameterValueRequest
+            GriptapeNodes.handle_request(
+                SetParameterValueRequest(parameter_name="all_tasks", value=task_list, node_name=self.name)
+            )
+            self.parameter_output_values["all_tasks"] = task_list
+            self.publish_update_to_parameter("all_tasks", task_list)
+
+            # Determine what to select
+            selected_value = choices_names[0] if choices_names else "No tasks available"
+            selected_index = 0
+
+            # Try to preserve the current selection
+            if (
+                current_selection
+                and current_selection != "Load tasks to see options"
+                and current_selection in choices_names
+            ):
+                selected_index = choices_names.index(current_selection)
+                selected_value = current_selection
+                logger.info(f"{self.name}: Preserved selection: {current_selection}")
+            else:
+                selected_value = choices_names[0]
+                selected_index = 0
+                logger.info(f"{self.name}: Selected first task: {choices_names[0]}")
+
+            # Update the dropdown choices
+            logger.info(f"{self.name}: Updating dropdown with {len(choices_names)} choices: {choices_names[:3]}...")
+            self._update_option_choices("selected_task", choices_names, selected_value)
+            logger.info(f"{self.name}: Dropdown updated, selected_value: {selected_value}")
+
+            # Update the selected task data
+            self._update_selected_task_data_from_processed(
+                task_list[selected_index] if selected_index < len(task_list) else {}
+            )
+
+            logger.info(f"{self.name}: Successfully loaded {len(task_list)} tasks")
+
+        except Exception as e:
+            logger.error(f"{self.name}: Failed to load tasks: {e}")
+            self._update_option_choices("selected_task", ["Error loading tasks"], "Error loading tasks")

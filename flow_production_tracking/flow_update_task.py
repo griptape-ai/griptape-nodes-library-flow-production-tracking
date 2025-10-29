@@ -1,365 +1,386 @@
 from typing import Any
 
+import httpx
 from base_shotgrid_node import BaseShotGridNode
-from flow_utils import create_shotgrid_api
 
-from griptape_nodes.exe_types.core_types import Parameter, ParameterGroup, ParameterMessage, ParameterMode
-from griptape_nodes.retained_mode.griptape_nodes import logger
-from griptape_nodes.traits.options import Options
+from griptape_nodes.exe_types.core_types import (
+    Parameter,
+    ParameterMode,
+)
+from griptape_nodes.exe_types.param_types.parameter_string import ParameterString
+from griptape_nodes.retained_mode.events.parameter_events import SetParameterValueRequest
+from griptape_nodes.retained_mode.griptape_nodes import GriptapeNodes, logger
+
+# Constants
+HTTP_OK = 200
 
 
 class FlowUpdateTask(BaseShotGridNode):
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
 
-        # Dynamic message that will be updated with the updated task link
-        self.task_message = ParameterMessage(
-            name="task_message",
-            title="Task Management",
-            value="Update a task to see the link to view it in ShotGrid. Click the button to view all tasks.",
-            button_link="",
-            button_text="View All Tasks",
-            variant="info",
-            full_width=True,
+        # Input parameters
+        self.add_parameter(
+            ParameterString(
+                name="task_id",
+                default_value=None,
+                tooltip="The ID of the task to update.",
+                placeholder_text="Enter task ID (e.g., 6817)",
+            )
         )
-        self.add_node_element(self.task_message)
-
-        # Set the initial link to the main tasks page
-        self._update_task_message_initial()
-
-        with ParameterGroup(name="task_input") as task_input:
-            self.add_parameter(
-                Parameter(
-                    name="task_id",
-                    type="string",
-                    default_value=None,
-                    tooltip="The ID of the task to update.",
-                )
+        self.add_parameter(
+            ParameterString(
+                name="task_name",
+                default_value=None,
+                tooltip="The new name/content for the task (optional).",
+                placeholder_text="Enter new task name/content",
             )
-            self.add_parameter(
-                Parameter(
-                    name="task_content",
-                    type="string",
-                    default_value=None,
-                    tooltip="The new content/name for the task (optional).",
-                )
+        )
+        self.add_parameter(
+            ParameterString(
+                name="status",
+                default_value=None,
+                tooltip="The new status for the task (optional).",
+                placeholder_text="Enter new status",
             )
-            self.add_parameter(
-                Parameter(
-                    name="task_status",
-                    type="string",
-                    default_value=None,
-                    tooltip="The new status for this task (optional).",
-                    traits={Options(choices=["wtg", "ip", "fin", "rev", "hld", "na"])},
-                )
+        )
+        self.add_parameter(
+            ParameterString(
+                name="assigned_to",
+                default_value=None,
+                tooltip="The new assignee for the task (optional). Use user ID or login name.",
+                placeholder_text="Enter user ID or login name",
             )
-            self.add_parameter(
-                Parameter(
-                    name="assignee_id",
-                    type="string",
-                    default_value=None,
-                    tooltip="The user ID to assign this task to (optional).",
-                    traits={Options(choices=["No users available"])},
-                )
+        )
+        self.add_parameter(
+            ParameterString(
+                name="priority",
+                default_value=None,
+                tooltip="The new priority for the task (optional).",
+                placeholder_text="Enter new priority",
             )
-            self.add_parameter(
-                Parameter(
-                    name="step_id",
-                    type="string",
-                    default_value=None,
-                    tooltip="The step ID for this task (optional).",
-                    traits={Options(choices=["No steps available"])},
-                )
+        )
+        self.add_parameter(
+            ParameterString(
+                name="start_date",
+                default_value=None,
+                tooltip="The new start date for the task (optional). Format: YYYY-MM-DD",
+                placeholder_text="YYYY-MM-DD",
             )
+        )
+        self.add_parameter(
+            ParameterString(
+                name="due_date",
+                default_value=None,
+                tooltip="The new due date for the task (optional). Format: YYYY-MM-DD",
+                placeholder_text="YYYY-MM-DD",
+            )
+        )
+        self.add_parameter(
+            ParameterString(
+                name="description",
+                default_value=None,
+                tooltip="The new description for the task (optional).",
+                placeholder_text="Enter new description",
+            )
+        )
 
         # Output parameters
         self.add_parameter(
-            Parameter(
-                name="updated_task",
-                output_type="json",
-                type="json",
-                default_value=None,
-                tooltip="The updated task data",
+            ParameterString(
+                name="task_url",
+                default_value="",
+                tooltip="The URL to view the task in ShotGrid.",
                 allowed_modes={ParameterMode.OUTPUT},
-                ui_options={"hide_property": True},
             )
         )
         self.add_parameter(
             Parameter(
-                name="task_id",
-                output_type="string",
-                type="string",
-                default_value=None,
-                tooltip="The ID of the updated task",
+                name="updated_task_id",
+                type="str",
+                default_value="",
+                tooltip="ID of the updated task",
                 allowed_modes={ParameterMode.OUTPUT},
+            )
+        )
+        self.add_parameter(
+            ParameterString(
+                name="updated_task_name",
+                default_value="",
+                tooltip="Name/content of the updated task",
+                allowed_modes={ParameterMode.OUTPUT},
+            )
+        )
+        self.add_parameter(
+            ParameterString(
+                name="updated_status",
+                default_value="",
+                tooltip="Status of the updated task",
+                allowed_modes={ParameterMode.OUTPUT},
+            )
+        )
+        self.add_parameter(
+            ParameterString(
+                name="updated_assigned_to",
+                default_value="",
+                tooltip="Who the updated task is assigned to",
+                allowed_modes={ParameterMode.OUTPUT},
+            )
+        )
+        self.add_parameter(
+            ParameterString(
+                name="updated_priority",
+                default_value="",
+                tooltip="Priority of the updated task",
+                allowed_modes={ParameterMode.OUTPUT},
+            )
+        )
+        self.add_parameter(
+            ParameterString(
+                name="updated_start_date",
+                default_value="",
+                tooltip="Start date of the updated task",
+                allowed_modes={ParameterMode.OUTPUT},
+            )
+        )
+        self.add_parameter(
+            ParameterString(
+                name="updated_due_date",
+                default_value="",
+                tooltip="Due date of the updated task",
+                allowed_modes={ParameterMode.OUTPUT},
+            )
+        )
+        self.add_parameter(
+            ParameterString(
+                name="updated_description",
+                default_value="",
+                tooltip="Description of the updated task",
+                allowed_modes={ParameterMode.OUTPUT},
+            )
+        )
+        self.add_parameter(
+            Parameter(
+                name="task_data",
+                type="json",
+                default_value={},
+                allowed_modes={ParameterMode.OUTPUT},
+                tooltip="Complete data for the updated task",
                 ui_options={"hide_property": True},
             )
         )
 
-        self.add_node_element(task_input)
-
-        # Populate step and user choices after all parameters are added
-        self._populate_step_choices()
-        self._populate_user_choices()
-
     def after_value_set(self, parameter: Parameter, value: Any) -> None:
         if parameter.name == "task_id" and value:
-            # Load task data when task ID is provided
-            self._load_task_data(value)
+            # Update task URL when task_id changes
+            self._update_task_url()
+        return super().after_value_set(parameter, value)
 
-    def _update_task_message_initial(self) -> None:
-        """Set the initial value of the ParameterMessage to the main ShotGrid instance."""
+    def _update_task_url(self) -> None:
+        """Update the task URL based on the current task_id."""
+        task_id = self.get_parameter_value("task_id")
+        if not task_id:
+            return
+
         try:
             base_url = self._get_shotgrid_config()["base_url"]
-            self.task_message.value = (
-                "Update a task to see the link to view it in ShotGrid. Click the button to view all tasks."
+            task_url = f"{base_url.rstrip('/')}/detail/Task/{task_id}"
+        except Exception:
+            task_url = f"https://shotgrid.autodesk.com/detail/Task/{task_id}"
+
+        GriptapeNodes.handle_request(
+            SetParameterValueRequest(parameter_name="task_url", value=task_url, node_name=self.name)
+        )
+        self.parameter_output_values["task_url"] = task_url
+        self.publish_update_to_parameter("task_url", task_url)
+
+    def _resolve_user_id(self, assigned_to: str) -> str | None:
+        """Resolve user ID from login name or return the ID if already provided."""
+        if not assigned_to:
+            return None
+
+        # If it's already a numeric ID, return it
+        try:
+            int(assigned_to)
+        except ValueError:
+            # Otherwise, try to resolve by login name
+            try:
+                access_token = self._get_access_token()
+                base_url = self._get_shotgrid_config()["base_url"]
+                url = f"{base_url}api/v1/entity/human_users"
+
+                params = {"fields": "id,login", "filter[login]": assigned_to}
+                headers = {"Authorization": f"Bearer {access_token}", "Accept": "application/json"}
+
+                with httpx.Client() as client:
+                    response = client.get(url, headers=headers, params=params)
+                    if response.status_code == HTTP_OK:
+                        data = response.json()
+                        users = data.get("data", [])
+                        if users:
+                            return str(users[0]["id"])
+                    logger.warning(f"{self.name}: Could not find user with login '{assigned_to}'")
+                    return None
+
+            except Exception as e:
+                logger.error(f"{self.name}: Error resolving user '{assigned_to}': {e}")
+                return None
+        else:
+            return assigned_to
+
+    def _prepare_update_data(self) -> dict:
+        """Prepare the update data from input parameters."""
+        task_name = self.get_parameter_value("task_name")
+        status = self.get_parameter_value("status")
+        assigned_to = self.get_parameter_value("assigned_to")
+        priority = self.get_parameter_value("priority")
+        start_date = self.get_parameter_value("start_date")
+        due_date = self.get_parameter_value("due_date")
+        description = self.get_parameter_value("description")
+
+        update_data = {}
+
+        if task_name is not None:
+            update_data["content"] = task_name
+        if status is not None:
+            update_data["sg_status_list"] = status
+        if priority is not None:
+            update_data["sg_priority"] = priority
+        if start_date is not None:
+            update_data["sg_start_date"] = start_date
+        if due_date is not None:
+            update_data["sg_due_date"] = due_date
+        if description is not None:
+            update_data["sg_description"] = description
+
+        # Handle assigned_to separately as it requires relationship update
+        if assigned_to is not None:
+            user_id = self._resolve_user_id(assigned_to)
+            if user_id:
+                update_data["task_assignees"] = [{"type": "HumanUser", "id": int(user_id)}]
+            else:
+                logger.warning(f"{self.name}: Could not resolve user '{assigned_to}', skipping assignment")
+
+        return update_data
+
+    def _extract_task_data(self, task_data: dict) -> dict:
+        """Extract and process task data from API response."""
+        attributes = task_data.get("attributes", {})
+        relationships = task_data.get("relationships", {})
+
+        # Safely extract nested data
+        step_data = relationships.get("step", {}) or {}
+        step_name = step_data.get("data", {}) or {}
+
+        task_assignees_data = relationships.get("task_assignees", {}) or {}
+
+        entity_data = relationships.get("entity", {}) or {}
+        project_data = relationships.get("project", {}) or {}
+
+        # Extract assignee information
+        assigned_to_name = ""
+        if task_assignees_data.get("data"):
+            assignee_data = task_assignees_data["data"][0] if task_assignees_data["data"] else {}
+            assigned_to_name = assignee_data.get("name", "")
+
+        return {
+            "id": task_data.get("id"),
+            "content": attributes.get("content"),
+            "sg_status_list": attributes.get("sg_status_list"),
+            "step": step_name.get("name"),
+            "task_assignees": task_assignees_data.get("data", []),
+            "sg_priority": attributes.get("sg_priority"),
+            "sg_start_date": attributes.get("sg_start_date"),
+            "sg_due_date": attributes.get("sg_due_date"),
+            "sg_description": attributes.get("sg_description"),
+            "entity": entity_data.get("data", {}),
+            "project": project_data.get("data", {}),
+            "assigned_to_name": assigned_to_name,
+        }
+
+    def _update_output_parameters(self, processed_data: dict) -> None:
+        """Update all output parameters with the processed task data."""
+        params = {
+            "updated_task_id": str(processed_data.get("id", "")),
+            "updated_task_name": processed_data.get("content", ""),
+            "updated_status": processed_data.get("sg_status_list", ""),
+            "updated_assigned_to": processed_data.get("assigned_to_name", ""),
+            "updated_priority": processed_data.get("sg_priority", ""),
+            "updated_start_date": processed_data.get("sg_start_date", ""),
+            "updated_due_date": processed_data.get("sg_due_date", ""),
+            "updated_description": processed_data.get("sg_description", ""),
+            "task_data": {
+                "id": processed_data.get("id"),
+                "content": processed_data.get("content"),
+                "sg_status_list": processed_data.get("sg_status_list"),
+                "step": processed_data.get("step"),
+                "task_assignees": processed_data.get("task_assignees"),
+                "sg_priority": processed_data.get("sg_priority"),
+                "sg_start_date": processed_data.get("sg_start_date"),
+                "sg_due_date": processed_data.get("sg_due_date"),
+                "sg_description": processed_data.get("sg_description"),
+                "entity": processed_data.get("entity"),
+                "project": processed_data.get("project"),
+            },
+        }
+
+        for param_name, value in params.items():
+            GriptapeNodes.handle_request(
+                SetParameterValueRequest(parameter_name=param_name, value=value, node_name=self.name)
             )
-            self.task_message.button_link = base_url
-            logger.info(f"{self.name}: Set initial task message to main ShotGrid instance.")
-        except Exception as e:
-            logger.error(f"{self.name}: Failed to set initial task message: {e}")
-
-    def _update_task_message(self, task_id: int, task_content: str) -> None:
-        """Update the ParameterMessage with a link to the updated task."""
-        try:
-            # Construct the full ShotGrid URL for the task
-            base_url = self._get_shotgrid_config()["base_url"]
-            task_url = f"{base_url}page/task_default?entity_type=Task&task_id={task_id}"
-
-            # Update the button_link and value of the ParameterMessage
-            self.task_message.button_link = task_url
-            self.task_message.value = (
-                f"Task '{task_content}' updated successfully! Click the button to view it in ShotGrid."
-            )
-            logger.info(f"{self.name}: Updated task message with link to task {task_id}")
-        except Exception as e:
-            logger.error(f"{self.name}: Failed to update task message: {e}")
-
-    def _load_task_data(self, task_id: str) -> None:
-        """Load task data when task ID is provided"""
-        try:
-            # Get access token and create API instance
-            access_token = self._get_access_token()
-            base_url = self._get_shotgrid_config()["base_url"]
-            api = create_shotgrid_api(access_token, base_url)
-
-            # Get task data
-            task_data = api.get_entity_data("tasks", int(task_id))
-
-            if task_data:
-                attrs = task_data.get("attributes", {})
-
-                # Set current values as defaults
-                current_content = attrs.get("content", "")
-                current_status = attrs.get("sg_status_list", "")
-
-                # Update parameter values with current task data
-                self.parameter_values["task_content"] = current_content
-                self.parameter_values["task_status"] = current_status
-
-                logger.info(f"{self.name}: Loaded task data for task {task_id}")
-            else:
-                logger.warning(f"{self.name}: Could not load task data for task {task_id}")
-
-        except Exception as e:
-            logger.error(f"{self.name}: Failed to load task data: {e}")
-
-    def _populate_step_choices(self) -> None:
-        """Populate the step_id parameter with available steps"""
-        try:
-            # Get access token and create API instance
-            access_token = self._get_access_token()
-            base_url = self._get_shotgrid_config()["base_url"]
-            api = create_shotgrid_api(access_token, base_url)
-
-            # Get steps
-            steps = api.get_steps()
-
-            if steps:
-                choices = []
-                for step in steps:
-                    step_id = step.get("id")
-                    step_name = step.get("attributes", {}).get("short_name", f"Step {step_id}")
-                    step_code = step.get("attributes", {}).get("code", "")
-
-                    if step_code:
-                        choice_text = f"{step_name} ({step_code})"
-                    else:
-                        choice_text = step_name
-
-                    choices.append(choice_text)
-
-                # Update the step_id parameter with the new choices
-                self._update_option_choices("step_id", choices, choices[0] if choices else "No steps available")
-                logger.info(f"{self.name}: Populated {len(choices)} step choices")
-            else:
-                self._update_option_choices("step_id", ["No steps available"], "No steps available")
-                logger.info(f"{self.name}: No steps found")
-
-        except Exception as e:
-            logger.warning(f"{self.name}: Could not populate step choices: {e}")
-            self._update_option_choices("step_id", ["No steps available"], "No steps available")
-
-    def _populate_user_choices(self) -> None:
-        """Populate the assignee_id parameter with available users"""
-        try:
-            # Get access token and create API instance
-            access_token = self._get_access_token()
-            base_url = self._get_shotgrid_config()["base_url"]
-            api = create_shotgrid_api(access_token, base_url)
-
-            # Get users
-            users = api.get_users()
-
-            if users:
-                choices = []
-                for user in users:
-                    user_id = user.get("id")
-                    user_name = user.get("attributes", {}).get("name", f"User {user_id}")
-                    user_login = user.get("attributes", {}).get("login", "")
-
-                    if user_login:
-                        choice_text = f"{user_name} ({user_login})"
-                    else:
-                        choice_text = user_name
-
-                    choices.append(choice_text)
-
-                # Update the assignee_id parameter with the new choices
-                self._update_option_choices("assignee_id", choices, choices[0] if choices else "No users available")
-                logger.info(f"{self.name}: Populated {len(choices)} user choices")
-            else:
-                self._update_option_choices("assignee_id", ["No users available"], "No users available")
-                logger.info(f"{self.name}: No users found")
-
-        except Exception as e:
-            logger.warning(f"{self.name}: Could not populate user choices: {e}")
-            self._update_option_choices("assignee_id", ["No users available"], "No users available")
+            self.parameter_output_values[param_name] = value
+            self.publish_update_to_parameter(param_name, value)
 
     def process(self) -> None:
+        """Update the task with the provided information."""
         try:
-            # Get input parameters
+            # Get and validate task ID
             task_id = self.get_parameter_value("task_id")
-            task_content = self.get_parameter_value("task_content")
-            task_status = self.get_parameter_value("task_status")
-            assignee_id = self.get_parameter_value("assignee_id")
-            step_id = self.get_parameter_value("step_id")
-
             if not task_id:
-                logger.error(f"{self.name}: task_id is required")
+                logger.error(f"{self.name}: Task ID is required")
                 return
-
-            # Convert task_id to integer
-            try:
-                task_id = int(task_id)
-            except (ValueError, TypeError):
-                logger.error(f"{self.name}: task_id must be a valid integer")
-                return
-
-            # Get access token and base URL
-            access_token = self._get_access_token()
-            base_url = self._get_shotgrid_config()["base_url"]
-            api = create_shotgrid_api(access_token, base_url)
 
             # Prepare update data
-            update_data = {}
-            has_updates = False
-
-            if task_content is not None:
-                update_data["content"] = task_content
-                has_updates = True
-
-            if task_status is not None:
-                update_data["sg_status_list"] = task_status
-                has_updates = True
-
-            # Add step if provided
-            if step_id and step_id != "No steps available":
-                # Extract step ID from the selected choice
-                try:
-                    steps = api.get_steps()
-                    step_to_use = None
-
-                    for step in steps:
-                        step_id_from_api = step.get("id")
-                        step_name = step.get("attributes", {}).get("short_name", "")
-                        step_code = step.get("attributes", {}).get("code", "")
-
-                        if step_code:
-                            choice_text = f"{step_name} ({step_code})"
-                        else:
-                            choice_text = step_name
-
-                        if choice_text == step_id:
-                            step_to_use = step_id_from_api
-                            break
-
-                    if step_to_use:
-                        update_data["step"] = {"type": "Step", "id": step_to_use}
-                        has_updates = True
-                        logger.info(f"{self.name}: Using step ID: {step_to_use}")
-                    else:
-                        logger.warning(f"{self.name}: Could not find step ID for selection: {step_id}")
-
-                except Exception as e:
-                    logger.warning(f"{self.name}: Error parsing step selection: {e}")
-
-            # Add assignee if provided
-            if assignee_id and assignee_id != "No users available":
-                # Extract user ID from the selected choice
-                try:
-                    users = api.get_users()
-                    user_to_use = None
-
-                    for user in users:
-                        user_id_from_api = user.get("id")
-                        user_name = user.get("attributes", {}).get("name", "")
-                        user_login = user.get("attributes", {}).get("login", "")
-
-                        if user_login:
-                            choice_text = f"{user_name} ({user_login})"
-                        else:
-                            choice_text = user_name
-
-                        if choice_text == assignee_id:
-                            user_to_use = user_id_from_api
-                            break
-
-                    if user_to_use:
-                        update_data["task_assignees"] = [{"type": "HumanUser", "id": user_to_use}]
-                        has_updates = True
-                        logger.info(f"{self.name}: Using user ID: {user_to_use}")
-                    else:
-                        logger.warning(f"{self.name}: Could not find user ID for selection: {assignee_id}")
-
-                except Exception as e:
-                    logger.warning(f"{self.name}: Error parsing user selection: {e}")
-
-            if not has_updates:
-                logger.warning(f"{self.name}: No updates provided")
+            update_data = self._prepare_update_data()
+            if not update_data:
+                logger.warning(f"{self.name}: No fields to update")
                 return
 
-            # Update the task
-            logger.info(f"{self.name}: Updating task {task_id} with data: {update_data}")
+            # Make the update request
+            access_token = self._get_access_token()
+            base_url = self._get_shotgrid_config()["base_url"]
+            url = f"{base_url}api/v1/entity/tasks/{task_id}"
 
-            updated_task = api.update_task(task_id, update_data)
+            headers = {
+                "Authorization": f"Bearer {access_token}",
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+            }
 
-            if updated_task:
-                logger.info(f"{self.name}: Task updated successfully")
+            with httpx.Client() as client:
+                response = client.patch(url, headers=headers, json={"data": update_data})
+                response.raise_for_status()
 
-                # Update the ParameterMessage with a link to the updated task
-                task_content_display = task_content or updated_task.get("attributes", {}).get(
-                    "content", f"Task {task_id}"
-                )
-                self._update_task_message(task_id, task_content_display)
+                # Process the response
+                updated_data = response.json()
+                task_data = updated_data.get("data", {})
 
-                # Output the results
-                self.parameter_output_values["updated_task"] = updated_task
-                self.parameter_output_values["task_id"] = str(task_id)
+                if not task_data:
+                    logger.error(f"{self.name}: No task data returned from update")
+                    return
+
+                # Extract and process task data
+                processed_data = self._extract_task_data(task_data)
+
+                # Update output parameters
+                self._update_output_parameters(processed_data)
+
+                # Update task URL
+                self._update_task_url()
 
                 logger.info(f"{self.name}: Successfully updated task {task_id}")
-            else:
-                logger.error(f"{self.name}: Failed to update task")
 
+        except httpx.HTTPStatusError as e:
+            logger.error(f"{self.name}: HTTP error updating task: {e.response.status_code} - {e.response.text}")
         except Exception as e:
-            logger.error(f"{self.name} encountered an error: {e!s}")
+            logger.error(f"{self.name}: Error updating task: {e}")

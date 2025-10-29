@@ -14,7 +14,8 @@ from griptape_nodes.exe_types.core_types import (
 from griptape_nodes.exe_types.param_types.parameter_bool import ParameterBool
 from griptape_nodes.exe_types.param_types.parameter_image import ParameterImage
 from griptape_nodes.exe_types.param_types.parameter_string import ParameterString
-from griptape_nodes.retained_mode.griptape_nodes import logger
+from griptape_nodes.retained_mode.events.parameter_events import SetParameterValueRequest
+from griptape_nodes.retained_mode.griptape_nodes import GriptapeNodes, logger
 from griptape_nodes.traits.button import Button, ButtonDetailsMessagePayload
 from griptape_nodes.traits.options import Options
 
@@ -41,17 +42,7 @@ class FlowListProjects(BaseShotGridNode):
                 name="projects_url",
                 default_value=projects_url,
                 allow_input=False,
-                tooltip="Load all your Autodesk Flow projects",
-                traits={
-                    Button(
-                        label="Reload Projects",
-                        icon="list-restart",
-                        size="icon",
-                        variant="secondary",
-                        full_width=True,
-                        on_click=self._reload_projects,
-                    ),
-                },
+                tooltip="All your Autodesk Flow projects. Use the refresh button to update the selected project's data.",
             )
         )
 
@@ -89,10 +80,11 @@ class FlowListProjects(BaseShotGridNode):
                 traits={
                     Options(choices=PROJECT_CHOICES),
                     Button(
-                        icon="list-restart",
-                        size="icon",
+                        icon="refresh-cw",
                         variant="secondary",
                         on_click=self._reload_projects,
+                        full_width=True,
+                        label="Refresh Selected",
                     ),
                 },
             )
@@ -252,9 +244,19 @@ class FlowListProjects(BaseShotGridNode):
         if parameter.name == "project":
             self.publish_update_to_parameter("project", value)
             if value and value != RELOAD_PROJECTS_CHOICE:
-                # Find the index of the selected project
+                # Find the index of the selected project by matching display names
                 projects = self.get_parameter_value("all_projects") or []
-                selected_index = next((i for i, project in enumerate(projects) if project["name"] == value), 0)
+                selected_index = 0
+
+                # Clean the selection to match against project names
+                clean_selection = value.replace("📋 ", "").replace(" (Template)", "")
+
+                for i, project in enumerate(projects):
+                    project_name = project.get("name", "")
+                    if project_name == clean_selection:
+                        selected_index = i
+                        break
+
                 self._update_project_data(selected_index)
         return super().after_value_set(parameter, value)
 
@@ -272,56 +274,111 @@ class FlowListProjects(BaseShotGridNode):
         # Validate and get a working image
         validated_image = self._validate_and_get_image(project.get("image"), project_name)
 
-        self.parameter_output_values["project_id"] = project["id"]
-        self.parameter_output_values["project_image"] = validated_image
-        self.parameter_output_values["project_data"] = project
-        self.parameter_output_values["project_description"] = project_description
-        self.parameter_output_values["project_url"] = project_url
+        # Update all project parameters using SetParameterValueRequest
+        params = {
+            "project_id": project["id"],
+            "project_image": validated_image,
+            "project_data": project,
+            "project_description": project_description,
+            "project_url": project_url,
+        }
 
-        self.publish_update_to_parameter("project_id", project["id"])
-        self.publish_update_to_parameter("project_data", project)
-        self.publish_update_to_parameter("project_image", validated_image)
-        self.publish_update_to_parameter("project_description", project_description)
-        self.publish_update_to_parameter("project_url", project_url)
+        for param_name, value in params.items():
+            GriptapeNodes.handle_request(
+                SetParameterValueRequest(parameter_name=param_name, value=value, node_name=self.name)
+            )
+            self.parameter_output_values[param_name] = value
+            self.publish_update_to_parameter(param_name, value)
 
     def _reload_projects(self, button: Button, button_details: ButtonDetailsMessagePayload) -> NodeMessageResult | None:  # noqa: ARG002
-        """Reload projects when the reload button is clicked."""
+        """Refresh the selected project when the refresh button is clicked."""
         try:
-            # Step 1: Get projects from API
-            projects = self._fetch_projects_from_api()
-
-            # Step 2: Process projects into choices
-            project_list, choices_names = self._process_projects_to_choices(projects)
-
-            # Step 3: Set the projects parameter with the processed data
-            self.set_parameter_value("all_projects", project_list)
-            self.parameter_output_values["all_projects"] = project_list
-
-            # Step 4: Update parameter choices and preserve current selection
             current_selection = self.get_parameter_value("project")
-            selected_id = 0  # Default to first project
-            selected_value = choices_names[0] if choices_names else RELOAD_PROJECTS_CHOICE
+            if not current_selection or current_selection == RELOAD_PROJECTS_CHOICE:
+                logger.warning(f"{self.name}: No project selected to refresh")
+                return None
 
-            # Try to preserve the current selection by matching project names
-            if current_selection and current_selection != RELOAD_PROJECTS_CHOICE:
-                # Remove template indicators for comparison
-                clean_current = current_selection.replace("📋 ", "").replace(" (Template)", "")
+            # Clean the selection to get the actual project name
+            clean_selection = current_selection.replace("📋 ", "").replace(" (Template)", "")
 
-                for i, project in enumerate(project_list):
-                    project_name = project.get("name", "")
-                    if project_name == clean_current:
-                        selected_id = i
-                        selected_value = choices_names[i]
-                        break
+            # Get the current project ID from all_projects
+            projects = self.get_parameter_value("all_projects") or []
+            selected_project_id = None
+            selected_index = 0
 
-            self._update_option_choices("project", choices_names, selected_value)
+            for i, project in enumerate(projects):
+                project_name = project.get("name", "")
+                if project_name == clean_selection:
+                    selected_project_id = project.get("id")
+                    selected_index = i
+                    break
 
-            # Step 5: Update the Selected Project Data and ID for the selected
-            self._update_project_data(selected_id)
+            if not selected_project_id:
+                logger.warning(f"{self.name}: Could not find project ID for '{clean_selection}'")
+                return None
+
+            # Fetch fresh data for this specific project
+            logger.info(f"{self.name}: Refreshing project {selected_project_id} ({clean_selection})")
+            fresh_project_data = self._fetch_single_project(selected_project_id)
+
+            if not fresh_project_data:
+                logger.warning(f"{self.name}: Failed to fetch fresh data for project {selected_project_id}")
+                return None
+
+            # Update the project in all_projects using SetParameterValueRequest
+            projects[selected_index] = fresh_project_data
+            GriptapeNodes.handle_request(
+                SetParameterValueRequest(parameter_name="all_projects", value=projects, node_name=self.name)
+            )
+            self.parameter_output_values["all_projects"] = projects
+            self.publish_update_to_parameter("all_projects", projects)
+
+            # Update the project data display
+            self._update_project_data(selected_index)
+
+            logger.info(f"{self.name}: Successfully refreshed project {selected_project_id}")
 
         except Exception as e:
-            logger.error(f"Failed to reload projects: {e}")
+            logger.error(f"{self.name}: Failed to refresh selected project: {e}")
         return None
+
+    def _fetch_single_project(self, project_id: int) -> dict | None:
+        """Fetch a single project from ShotGrid API."""
+        try:
+            # Get access token
+            access_token = self._get_access_token()
+
+            # Get base URL
+            base_url = self._get_shotgrid_config()["base_url"]
+            url = f"{base_url}api/v1/entity/projects/{project_id}"
+
+            # Add fields to get thumbnail URLs and template info
+            params = {"fields": "id,name,sg_description,image,project_status,is_template,created_at,updated_at"}
+
+            headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
+
+            with httpx.Client() as client:
+                response = client.get(url, headers=headers, params=params)
+                response.raise_for_status()
+
+                data = response.json()
+                project_data = data.get("data")
+
+                if project_data:
+                    # Add URL field for consistency
+                    project_data["url"] = f"{base_url}detail/Project/{project_id}"
+
+                    # Process the project data (same as _process_projects_to_choices but for single project)
+                    attributes = project_data.get("attributes", {})
+                    project_data.update(attributes)
+
+                    return project_data
+
+                return None
+
+        except Exception as e:
+            logger.error(f"{self.name}: Failed to fetch project {project_id}: {e}")
+            return None
 
     def _fetch_projects_from_api(self) -> list[dict]:
         """Fetch projects from ShotGrid API."""
@@ -415,15 +472,56 @@ class FlowListProjects(BaseShotGridNode):
         return project_list, choices_names
 
     def process(self) -> None:
-        """Process the node - projects are only loaded when user clicks the reload button."""
-        project = self.get_parameter_value("project")
-        if project and project != RELOAD_PROJECTS_CHOICE:
-            # Find the index of the selected project
-            projects = self.get_parameter_value("all_projects") or []
+        """Process the node - automatically load projects when run."""
+        try:
+            # Get current selection to preserve it
+            current_selection = self.get_parameter_value("project")
 
-            # Clean the current selection to match against project names
-            clean_selection = project.replace("📋 ", "").replace(" (Template)", "")
+            # Load projects from ShotGrid
+            logger.info(f"{self.name}: Loading projects from ShotGrid...")
+            projects = self._fetch_projects_from_api()
 
-            selected_index = next((i for i, proj in enumerate(projects) if proj["name"] == clean_selection), 0)
+            if not projects:
+                logger.warning(f"{self.name}: No projects found")
+                self._update_option_choices("project", ["No projects available"], "No projects available")
+                return
+
+            # Process projects to choices
+            project_list, choices_names = self._process_projects_to_choices(projects)
+
+            # Store all projects data first using SetParameterValueRequest
+            GriptapeNodes.handle_request(
+                SetParameterValueRequest(parameter_name="all_projects", value=project_list, node_name=self.name)
+            )
+            self.parameter_output_values["all_projects"] = project_list
+            self.publish_update_to_parameter("all_projects", project_list)
+
+            # Determine what to select
+            selected_value = choices_names[0] if choices_names else RELOAD_PROJECTS_CHOICE
+            selected_index = 0
+
+            # Try to preserve the current selection
+            if current_selection and current_selection != RELOAD_PROJECTS_CHOICE and current_selection in choices_names:
+                # Current selection is still valid, keep it
+                selected_index = choices_names.index(current_selection)
+                selected_value = current_selection
+                logger.info(f"{self.name}: Preserved selection: {current_selection}")
+            else:
+                # Current selection is not valid, select the first project
+                selected_value = choices_names[0]
+                selected_index = 0
+                logger.info(f"{self.name}: Selected first project: {choices_names[0]}")
+
+            # Update the dropdown choices
+            logger.info(f"{self.name}: Updating dropdown with {len(choices_names)} choices: {choices_names[:3]}...")
+            self._update_option_choices("project", choices_names, selected_value)
+            logger.info(f"{self.name}: Dropdown updated, selected_value: {selected_value}")
+
+            # Update the selected project data
             self._update_project_data(selected_index)
-        # Do nothing - projects are only loaded when user clicks the reload button
+
+            logger.info(f"{self.name}: Successfully loaded {len(project_list)} projects")
+
+        except Exception as e:
+            logger.error(f"{self.name}: Failed to load projects: {e}")
+            self._update_option_choices("project", ["Error loading projects"], "Error loading projects")

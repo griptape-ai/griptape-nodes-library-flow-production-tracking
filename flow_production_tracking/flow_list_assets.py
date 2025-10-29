@@ -10,7 +10,8 @@ from griptape_nodes.exe_types.core_types import (
 )
 from griptape_nodes.exe_types.param_types.parameter_image import ParameterImage
 from griptape_nodes.exe_types.param_types.parameter_string import ParameterString
-from griptape_nodes.retained_mode.griptape_nodes import logger
+from griptape_nodes.retained_mode.events.parameter_events import SetParameterValueRequest
+from griptape_nodes.retained_mode.griptape_nodes import GriptapeNodes, logger
 from griptape_nodes.traits.button import Button, ButtonDetailsMessagePayload
 from griptape_nodes.traits.options import Options
 
@@ -59,14 +60,6 @@ class FlowListAssets(BaseShotGridNode):
                             "Audio",
                         ]
                     ),
-                    Button(
-                        label="Load Assets",
-                        icon="list-restart",
-                        size="icon",
-                        variant="secondary",
-                        full_width=True,
-                        on_click=self._reload_assets,
-                    ),
                 },
             )
         )
@@ -82,27 +75,29 @@ class FlowListAssets(BaseShotGridNode):
             )
         )
         self.add_parameter(
-            ParameterString(
+            Parameter(
                 name="selected_asset",
-                default_value="No assets available",
-                tooltip="Select an asset from the list.",
-                allow_input=False,
-                allow_property=True,
-                ui_options={
-                    "display_name": "Select Asset",
-                    "data": ASSET_CHOICES_ARGS,
-                    "icon_size": "medium",
-                },
+                type="string",
+                default_value="Load assets to see options",
+                tooltip="Select an asset from the list. Use refresh button to update selected asset data.",
+                allowed_modes={ParameterMode.PROPERTY},
                 traits={
                     Options(choices=ASSET_CHOICES),
+                    Button(
+                        icon="refresh-cw",
+                        variant="secondary",
+                        on_click=self._refresh_selected_asset,
+                        label="Refresh Selected",
+                        full_width=True,
+                    ),
                 },
             )
         )
         self.add_parameter(
             ParameterImage(
-                name="asset_icon",
+                name="asset_image",
                 default_value="",
-                tooltip="Icon/thumbnail of the selected asset",
+                tooltip="Image/thumbnail of the selected asset",
                 allowed_modes={ParameterMode.OUTPUT},
             )
         )
@@ -146,21 +141,21 @@ class FlowListAssets(BaseShotGridNode):
     def after_value_set(self, parameter: Parameter, value: Any) -> None:
         if parameter.name == "selected_asset":
             self.publish_update_to_parameter("selected_asset", value)
-            if value and value != "No assets available":
-                # Find the index of the selected asset
+            if value and value != "Load assets to see options":
+                # Find the index of the selected asset by matching display names
                 assets = self.get_parameter_value("all_assets") or []
-                print(f"assets: {assets}")
-                print(f"value: {value}")
-                selected_index = next(
-                    (
-                        i
-                        for i, asset in enumerate(assets)
-                        if asset.get("attributes", {}).get("name") == value
-                        or asset.get("attributes", {}).get("code") == value
-                    ),
-                    0,
-                )
-                print(selected_index)
+                selected_index = 0
+
+                # Clean the selection to match against asset names/codes
+                clean_selection = value.replace("📋 ", "").replace(" (Template)", "")
+
+                for i, asset in enumerate(assets):
+                    asset_name = asset.get("name", "")
+                    asset_code = asset.get("code", "")
+                    if asset_name == clean_selection or asset_code == clean_selection:
+                        selected_index = i
+                        break
+
                 self._update_selected_asset_data(assets[selected_index] if selected_index < len(assets) else {})
         return super().after_value_set(parameter, value)
 
@@ -169,42 +164,127 @@ class FlowListAssets(BaseShotGridNode):
         if not asset_data:
             return
 
-        # Set basic asset info
+        # Extract basic asset info (from processed data structure)
         asset_id = asset_data.get("id", "")
-        attributes = asset_data.get("attributes", {})
+        asset_name = asset_data.get("name", f"Asset {asset_id}")
+        asset_code = asset_data.get("code", "")
+        # Try multiple description fields
+        asset_description = asset_data.get("description") or asset_data.get("sg_description") or ""
+        asset_image = asset_data.get("sg_thumbnail") or asset_data.get("image", "")
 
-        self.set_parameter_value("asset_id", asset_id)
-        self.parameter_output_values["asset_id"] = asset_id
-        self.parameter_output_values["asset_data"] = asset_data
-        self.publish_update_to_parameter("asset_id", asset_id)
-        self.publish_update_to_parameter("asset_data", asset_data)
-
-        # Set asset URL - construct a generic asset URL that ShotGrid can handle
-        # Since we don't have the page ID, we'll use a generic format that ShotGrid can redirect
+        # Generate web UI URL
         try:
             shotgrid_config = self._get_shotgrid_config()
             base_url = shotgrid_config.get("base_url", "https://shotgrid.autodesk.com/")
-            # Use a generic asset URL format that ShotGrid can redirect to the correct page
             asset_url = f"{base_url.rstrip('/')}/detail/Asset/{asset_id}"
         except Exception:
-            # Fallback to generic URL if config is not available
             asset_url = f"https://shotgrid.autodesk.com/detail/Asset/{asset_id}"
 
-        self.set_parameter_value("asset_url", asset_url)
-        self.parameter_output_values["asset_url"] = asset_url
-        self.publish_update_to_parameter("asset_url", asset_url)
+        # Update all asset parameters using SetParameterValueRequest
+        params = {
+            "asset_id": asset_id,
+            "asset_data": asset_data,
+            "asset_url": asset_url,
+            "asset_description": asset_description,
+            "asset_image": asset_image,
+        }
 
-        # Set asset description
-        asset_description = attributes.get("description", "")
-        self.set_parameter_value("asset_description", asset_description)
-        self.parameter_output_values["asset_description"] = asset_description
-        self.publish_update_to_parameter("asset_description", asset_description)
+        for param_name, value in params.items():
+            GriptapeNodes.handle_request(
+                SetParameterValueRequest(parameter_name=param_name, value=value, node_name=self.name)
+            )
+            self.parameter_output_values[param_name] = value
+            self.publish_update_to_parameter(param_name, value)
 
-        # Set asset icon/thumbnail
-        asset_icon = attributes.get("sg_thumbnail") or attributes.get("image", "")
-        self.set_parameter_value("asset_icon", asset_icon)
-        self.parameter_output_values["asset_icon"] = asset_icon
-        self.publish_update_to_parameter("asset_icon", asset_icon)
+    def _refresh_selected_asset(
+        self, button: Button, button_details: ButtonDetailsMessagePayload
+    ) -> NodeMessageResult | None:
+        """Refresh the selected asset when the refresh button is clicked."""
+        try:
+            current_selection = self.get_parameter_value("selected_asset")
+            if not current_selection or current_selection == "Load assets to see options":
+                logger.warning(f"{self.name}: No asset selected to refresh")
+                return None
+
+            # Clean the selection to get the actual asset name/code
+            clean_selection = current_selection.replace("📋 ", "").replace(" (Template)", "")
+
+            # Get the current asset ID from all_assets
+            assets = self.get_parameter_value("all_assets") or []
+            selected_asset_id = None
+            selected_index = 0
+
+            for i, asset in enumerate(assets):
+                asset_name = asset.get("name", "")
+                asset_code = asset.get("code", "")
+                if asset_name == clean_selection or asset_code == clean_selection:
+                    selected_asset_id = asset.get("id")
+                    selected_index = i
+                    break
+
+            if not selected_asset_id:
+                logger.warning(f"{self.name}: Could not find asset ID for '{clean_selection}'")
+                return None
+
+            # Fetch fresh data for this specific asset
+            logger.info(f"{self.name}: Refreshing asset {selected_asset_id} ({clean_selection})")
+            fresh_asset_data = self._fetch_single_asset(selected_asset_id)
+
+            if not fresh_asset_data:
+                logger.warning(f"{self.name}: Failed to fetch fresh data for asset {selected_asset_id}")
+                return None
+
+            # Update the asset in all_assets using SetParameterValueRequest
+            assets[selected_index] = fresh_asset_data
+            GriptapeNodes.handle_request(
+                SetParameterValueRequest(parameter_name="all_assets", value=assets, node_name=self.name)
+            )
+            self.parameter_output_values["all_assets"] = assets
+            self.publish_update_to_parameter("all_assets", assets)
+
+            # Update the asset data display
+            self._update_selected_asset_data(fresh_asset_data)
+
+            logger.info(f"{self.name}: Successfully refreshed asset {selected_asset_id}")
+
+        except Exception as e:
+            logger.error(f"{self.name}: Failed to refresh selected asset: {e}")
+        return None
+
+    def _fetch_single_asset(self, asset_id: int) -> dict | None:
+        """Fetch a single asset from ShotGrid API."""
+        try:
+            access_token = self._get_access_token()
+            base_url = self._get_shotgrid_config()["base_url"]
+            url = f"{base_url}api/v1/entity/assets/{asset_id}"
+
+            params = {
+                "fields": "id,code,name,sg_asset_type,sg_status_list,image,sg_thumbnail,project,links,description,sg_description"
+            }
+            headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
+
+            with httpx.Client() as client:
+                response = client.get(url, headers=headers, params=params)
+                response.raise_for_status()
+
+                data = response.json()
+                asset_data = data.get("data")
+
+                if asset_data:
+                    # Add URL field for consistency
+                    asset_data["url"] = f"{base_url}detail/Asset/{asset_id}"
+
+                    # Process the asset data
+                    attributes = asset_data.get("attributes", {})
+                    asset_data.update(attributes)
+
+                    return asset_data
+
+                return None
+
+        except Exception as e:
+            logger.error(f"{self.name}: Failed to fetch asset {asset_id}: {e}")
+            return None
 
     def _update_asset_types(self) -> None:
         """Update asset_type parameter choices with standard ShotGrid asset types."""
@@ -239,91 +319,6 @@ class FlowListAssets(BaseShotGridNode):
             if options_trait:
                 options_trait[0].choices = standard_asset_types
 
-    def _reload_assets(
-        self,
-        button: Button | None = None,
-        button_details: ButtonDetailsMessagePayload | None = None,
-        preserve_selection: bool = True,
-    ) -> NodeMessageResult | None:
-        """Reload assets when the reload button is clicked."""
-        try:
-            # Step 1: Get all assets from API (without filtering by asset type)
-            all_assets = self._fetch_all_assets_from_api()
-
-            # Step 2: Update asset types with standard ShotGrid types
-            self._update_asset_types()
-
-            # Step 3: Get filtered assets based on current asset type selection
-            assets = self._fetch_assets_from_api()
-
-            # Step 4: Process assets into choices
-            choices_args, choices_names = self._process_assets_to_choices(assets)
-
-            # Step 5: Update global variables
-            self.set_parameter_value("all_assets", all_assets)
-            self._update_global_choices(choices_args, choices_names)
-
-            # Step 6: Update parameter choices
-            self._update_parameter_choices(choices_args, choices_names)
-
-            # Step 7: Update parameter choices and preserve current selection
-            current_selection = self.get_parameter_value("selected_asset")
-            selected_id = 0  # Default to first asset
-            selected_value = choices_names[0] if choices_names else "No assets available"
-
-            # Try to preserve the current selection by matching asset names
-            if preserve_selection and current_selection and current_selection != "No assets available":
-                # Find the selected asset in the raw data by name
-                for i, asset in enumerate(assets):
-                    asset_name = asset.get("name", "")
-                    asset_code = asset.get("code", "")
-                    # Try to match by name or code
-                    if asset_name == current_selection or asset_code == current_selection:
-                        selected_id = i
-                        selected_value = choices_names[i]
-                        break
-
-            self._update_option_choices("selected_asset", choices_names, selected_value)
-
-            # Update the selected asset data outputs
-            if assets and selected_id < len(assets):
-                self._update_selected_asset_data(assets[selected_id])
-            else:
-                self._update_selected_asset_data({})
-
-        except Exception as e:
-            logger.error(f"Failed to reload assets: {e}")
-        return None
-
-    def _fetch_all_assets_from_api(self) -> list[dict]:
-        """Fetch all assets from ShotGrid API without filtering by asset type."""
-        # Get input parameters
-        project_id = self.get_parameter_value("project_id")
-        if not project_id:
-            return []
-
-        # Get access token
-        access_token = self._get_access_token()
-
-        # Make request to get assets
-        headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
-
-        # Get base URL
-        base_url = self._get_shotgrid_config()["base_url"]
-        url = f"{base_url}api/v1/entity/assets"
-
-        # Add fields to get asset information
-        params = {
-            "filter[project.Project.id]": project_id,
-            "fields": "id,code,name,sg_asset_type,sg_status_list,image,sg_thumbnail,project,links,description",
-        }
-
-        response = httpx.get(url, headers=headers, params=params, timeout=30.0)
-        response.raise_for_status()
-
-        data = response.json()
-        return data.get("data", [])
-
     def _fetch_assets_from_api(self) -> list[dict]:
         """Fetch assets from ShotGrid API."""
         # Get input parameters
@@ -352,7 +347,9 @@ class FlowListAssets(BaseShotGridNode):
         url = f"{base_url}api/v1/entity/assets"
 
         # Add fields to get thumbnail URLs - no complex filters, we'll filter in code
-        params = {"fields": "id,code,name,sg_asset_type,sg_status_list,image,sg_thumbnail,project,links,description"}
+        params = {
+            "fields": "id,code,name,sg_asset_type,sg_status_list,image,sg_thumbnail,project,links,description,sg_description"
+        }
 
         with httpx.Client() as client:
             response = client.get(url, headers=headers, params=params)
@@ -396,6 +393,8 @@ class FlowListAssets(BaseShotGridNode):
                 "sg_status_list": asset.get("attributes", {}).get("sg_status_list"),
                 "image": asset.get("attributes", {}).get("image"),
                 "sg_thumbnail": asset.get("attributes", {}).get("sg_thumbnail"),
+                "description": asset.get("attributes", {}).get("description"),
+                "sg_description": asset.get("attributes", {}).get("sg_description"),
                 "project": asset.get("relationships", {}).get("project", {}).get("data", {}).get("id"),
             }
             asset_list.append(asset_data)
@@ -424,76 +423,68 @@ class FlowListAssets(BaseShotGridNode):
             choices_args.append(choice)
             choices_names.append(display_name)
 
-        # Output the assets and project_id
-        self.parameter_output_values["all_assets"] = asset_list
-        project_id = self.get_parameter_value("project_id")
-
-        return choices_args, choices_names
-
-    def _update_global_choices(self, choices_args: list[dict], choices_names: list[str]) -> None:
-        """Update global choice variables."""
-        global ASSET_CHOICES_ARGS, ASSET_CHOICES
-        ASSET_CHOICES_ARGS = choices_args
-        ASSET_CHOICES = choices_names
-
-    def _update_parameter_choices(self, choices_args: list[dict], choices_names: list[str]) -> None:
-        """Update the parameter's choices without UI messaging."""
-        if choices_names and len(choices_names) > 0:
-            # Get the current selected value to preserve it
-            current_selection = self.get_parameter_value("selected_asset")
-
-            # Try to find the current selection in the new choices
-            selected_value = None
-            if current_selection and current_selection in choices_names:
-                # Exact match found
-                selected_value = current_selection
-            else:
-                # Try to find by asset ID if we have asset data
-                if current_selection and current_selection != "No assets available":
-                    # Look for a choice that might match the current selection
-                    # This is a fallback for when the display name changes but the asset is the same
-                    for i, choice_name in enumerate(choices_names):
-                        if (choice_name and current_selection in choice_name) or choice_name in current_selection:
-                            selected_value = choice_name
-                            break
-
-                if not selected_value:
-                    selected_value = choices_names[0]
-
-            # Use the proper method to update choices (this should persist)
-            try:
-                # Update choices using the built-in method
-                self._update_option_choices("selected_asset", choices_names, selected_value)
-
-                # Update UI options data
-                asset_param = self.get_parameter_by_name("selected_asset")
-                if asset_param:
-                    asset_ui_options = asset_param.ui_options
-                    asset_ui_options["data"] = choices_args
-                    asset_param.ui_options = asset_ui_options
-
-                # Set parameter value without emitting change events to avoid loops
-                self.set_parameter_value("selected_asset", selected_value, emit_change=False)
-            except Exception as e:
-                logger.error(f"Failed to update parameter choices: {e}")
-                # Fallback to direct assignment
-                self.parameter_values["selected_asset"] = selected_value
-        else:
-            # Handle no assets case
-            try:
-                asset_param = self.get_parameter_by_name("selected_asset")
-                if asset_param:
-                    traits = asset_param.find_elements_by_type(Options)
-                    if traits:
-                        traits[0].choices = ["No assets available"]
-                    asset_param.ui_options["data"] = []
-
-                self.set_parameter_value("selected_asset", "No assets available", emit_change=False)
-            except Exception as e:
-                logger.error(f"Failed to update parameter choices (no assets): {e}")
-                self.parameter_values["selected_asset"] = "No assets available"
+        return asset_list, choices_names
 
     def process(self) -> None:
-        """Process the node - assets are only loaded when user clicks the reload button."""
+        """Process the node - automatically load assets when run."""
+        try:
+            # Get current selection to preserve it
+            current_selection = self.get_parameter_value("selected_asset")
 
-        # Do nothing - assets are only loaded when user clicks the reload button
+            # Get input parameters
+            project_id = self.get_parameter_value("project_id")
+            if not project_id:
+                logger.warning(f"{self.name}: project_id is required")
+                self._update_option_choices("selected_asset", ["No project selected"], "No project selected")
+                return
+
+            # Load assets from ShotGrid
+            logger.info(f"{self.name}: Loading assets from ShotGrid for project {project_id}...")
+            assets = self._fetch_assets_from_api()
+
+            if not assets:
+                logger.warning(f"{self.name}: No assets found for project {project_id}")
+                self._update_option_choices("selected_asset", ["No assets available"], "No assets available")
+                return
+
+            # Process assets to choices
+            asset_list, choices_names = self._process_assets_to_choices(assets)
+
+            # Store all assets data first using SetParameterValueRequest
+            GriptapeNodes.handle_request(
+                SetParameterValueRequest(parameter_name="all_assets", value=asset_list, node_name=self.name)
+            )
+            self.parameter_output_values["all_assets"] = asset_list
+            self.publish_update_to_parameter("all_assets", asset_list)
+
+            # Determine what to select
+            selected_value = choices_names[0] if choices_names else "No assets available"
+            selected_index = 0
+
+            # Try to preserve the current selection
+            if (
+                current_selection
+                and current_selection != "Load assets to see options"
+                and current_selection in choices_names
+            ):
+                selected_index = choices_names.index(current_selection)
+                selected_value = current_selection
+                logger.info(f"{self.name}: Preserved selection: {current_selection}")
+            else:
+                selected_value = choices_names[0]
+                selected_index = 0
+                logger.info(f"{self.name}: Selected first asset: {choices_names[0]}")
+
+            # Update the dropdown choices
+            logger.info(f"{self.name}: Updating dropdown with {len(choices_names)} choices: {choices_names[:3]}...")
+            self._update_option_choices("selected_asset", choices_names, selected_value)
+            logger.info(f"{self.name}: Dropdown updated, selected_value: {selected_value}")
+
+            # Update the selected asset data
+            self._update_selected_asset_data(assets[selected_index] if selected_index < len(assets) else {})
+
+            logger.info(f"{self.name}: Successfully loaded {len(asset_list)} assets")
+
+        except Exception as e:
+            logger.error(f"{self.name}: Failed to load assets: {e}")
+            self._update_option_choices("selected_asset", ["Error loading assets"], "Error loading assets")
