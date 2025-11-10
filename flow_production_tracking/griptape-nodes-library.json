@@ -12,19 +12,6 @@
           "SHOTGRID_URL"
         ]
       }
-    },
-    {
-      "description": "Authentication method for Flow Production Tracking",
-      "category": "flow_production_tracking",
-      "contents": {
-        "auth": "API"
-      },
-      "schema": {
-        "auth": {
-          "type": "string",
-          "enum": ["API", "user"]
-        }
-      }
     }
   ],
   "metadata": {

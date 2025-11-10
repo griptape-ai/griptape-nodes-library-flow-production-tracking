@@ -45,9 +45,16 @@ To configure these settings, use the **Autodesk Flow Configuration** node which 
 To add this library to your Griptape Nodes installation:
 
 1. **Download the library** to your machine. We recommend creating a folder called `libraries` in your workspace (for example: `/Users/jason/Documents/GriptapeNodes/libraries`). Then download the library to that location:
+   
+   **Option A: Download ZIP**
+   - In GitHub, click the Green **Code** button and choose [Download zip](https://github.com/griptape-ai/griptape-nodes-library-flow-production-tracking/archive/refs/heads/main.zip)
+   - Unzip the file (it will be named `griptape-nodes-library-flow-production-tracking-main`)
+   - Move the folder to your library location and rename it to `griptape-nodes-library-flow-production-tracking` (remove the `-main` suffix)
+   
+   **Option B: Using Git** (if you have git installed)
    ```bash
    cd /Users/jason/Documents/GriptapeNodes/libraries
-   git clone <library_url>
+   git clone https://github.com/griptape-ai/griptape-nodes-library-flow-production-tracking.git
    ```
 
 2. **Open Griptape Nodes**
