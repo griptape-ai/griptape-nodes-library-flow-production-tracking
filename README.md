@@ -62,7 +62,8 @@ To add this library to your Griptape Nodes installation:
 3. **Add the library**:
    - Go to **Settings** → **Settings** → **Libraries**
    - Click **Add Library**
-   - Add the path to the library json file (ex: `/Users/jason/Documents/GriptapeNodes/libraries/griptape-nodes-library-flow-production-tracking/flow-production-tracking/griptape-nodes-library.json`)
+   - Add the path to the library folder (ex: `/Users/jason/Documents/GriptapeNodes/libraries/`)
+   - This will automatically discover all libraries located in that folder!
 
 4. **Reload Libraries**
     - Close the settings modal and click **Reload Libraries** in the sidebar
