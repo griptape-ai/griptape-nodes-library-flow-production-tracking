@@ -653,8 +653,8 @@ This is a powerful UI/UX pattern for managing collections of data (projects, ass
 #### **Core Pattern Components:**
 
 1. **Process Method**: Loads ALL items from API and populates dropdown
-2. **Selection Change**: Updates display from cached data (no API call)
-3. **Refresh Button**: Updates only the selected item from API
+1. **Selection Change**: Updates display from cached data (no API call)
+1. **Refresh Button**: Updates only the selected item from API
 
 #### **Implementation Structure:**
 
@@ -900,6 +900,7 @@ def _fetch_single_item(self, item_id: int) -> dict | None:
 #### **🚨 CRITICAL: Dropdown Update Pattern**
 
 **❌ WRONG - Don't Use Global Variables:**
+
 ```python
 # DON'T DO THIS - Global variables don't update the UI
 global ITEM_CHOICES, ITEM_CHOICES_ARGS
@@ -907,13 +908,15 @@ ITEM_CHOICES = choices_names
 ITEM_CHOICES_ARGS = []
 ```
 
-**✅ CORRECT - Use _update_option_choices Method:**
+**✅ CORRECT - Use \_update_option_choices Method:**
+
 ```python
 # DO THIS - Updates the Options trait directly
 self._update_option_choices("selected_item", choices_names, selected_value)
 ```
 
 **Why This Matters:**
+
 - Global variables (`ITEM_CHOICES`) are only used during parameter initialization
 - The dropdown UI is controlled by the `Options` trait on the parameter
 - `_update_option_choices()` directly updates the `Options` trait, which updates the UI
@@ -922,11 +925,11 @@ self._update_option_choices("selected_item", choices_names, selected_value)
 #### **Key Benefits of This Pattern:**
 
 1. **🚀 Fast Selection**: No API calls when switching items (uses cached data)
-2. **🎯 Targeted Refresh**: Only updates what changed (efficient API usage)
-3. **🔄 Smart Caching**: Maintains full dataset while allowing individual updates
-4. **🧠 Selection Persistence**: Preserves user selections across reloads
-5. **📱 Intuitive UX**: Standard "run node → get results" workflow
-6. **⚡ Efficient**: Minimal API calls, maximum responsiveness
+1. **🎯 Targeted Refresh**: Only updates what changed (efficient API usage)
+1. **🔄 Smart Caching**: Maintains full dataset while allowing individual updates
+1. **🧠 Selection Persistence**: Preserves user selections across reloads
+1. **📱 Intuitive UX**: Standard "run node → get results" workflow
+1. **⚡ Efficient**: Minimal API calls, maximum responsiveness
 
 #### **Required Imports:**
 
@@ -963,43 +966,49 @@ self.publish_update_to_parameter(param_name, value)
 #### **Examples in Codebase:**
 
 - `flow_list_projects.py` - Projects with refresh
-- `flow_list_assets.py` - Assets with refresh  
+- `flow_list_assets.py` - Assets with refresh
 - `flow_list_tasks.py` - Tasks with refresh
 
 #### **🔧 Troubleshooting: Dropdown Not Updating**
 
 **Symptoms:**
+
 - Running the node updates `all_items` but dropdown shows old choices
 - Dropdown shows "Load items to see options" even after successful API call
 - Selection works but choices don't refresh
 
 **Common Causes:**
+
 1. **Using global variables instead of `_update_option_choices()`**
-   ```python
-   # ❌ This won't update the UI
-   global ITEM_CHOICES
-   ITEM_CHOICES = choices_names
-   
-   # ✅ This will update the UI
-   self._update_option_choices("selected_item", choices_names, selected_value)
-   ```
 
-2. **Missing `_update_option_choices()` call in process method**
-   ```python
-   # ❌ Missing this line
-   self._update_option_choices("selected_item", choices_names, selected_value)
-   ```
+    ```python
+    # ❌ This won't update the UI
+    global ITEM_CHOICES
+    ITEM_CHOICES = choices_names
 
-3. **Incorrect parameter name in `_update_option_choices()`**
-   ```python
-   # ❌ Wrong parameter name
-   self._update_option_choices("selected_items", choices_names, selected_value)
-   
-   # ✅ Correct parameter name
-   self._update_option_choices("selected_item", choices_names, selected_value)
-   ```
+    # ✅ This will update the UI
+    self._update_option_choices("selected_item", choices_names, selected_value)
+    ```
+
+1. **Missing `_update_option_choices()` call in process method**
+
+    ```python
+    # ❌ Missing this line
+    self._update_option_choices("selected_item", choices_names, selected_value)
+    ```
+
+1. **Incorrect parameter name in `_update_option_choices()`**
+
+    ```python
+    # ❌ Wrong parameter name
+    self._update_option_choices("selected_items", choices_names, selected_value)
+
+    # ✅ Correct parameter name
+    self._update_option_choices("selected_item", choices_names, selected_value)
+    ```
 
 **Quick Fix Checklist:**
+
 - [ ] Using `_update_option_choices()` not global variables
 - [ ] Calling `_update_option_choices()` in process method
 - [ ] Parameter name matches exactly
@@ -1009,6 +1018,7 @@ self.publish_update_to_parameter(param_name, value)
 #### **🚨 CRITICAL: Parameter Type and Data Structure Issues**
 
 **❌ WRONG - Using ParameterString with ui_options:**
+
 ```python
 # DON'T DO THIS - ParameterString doesn't work with _update_option_choices
 ParameterString(
@@ -1024,6 +1034,7 @@ ParameterString(
 ```
 
 **✅ CORRECT - Use Parameter with allowed_modes:**
+
 ```python
 # DO THIS - Parameter works with _update_option_choices
 Parameter(
@@ -1035,6 +1046,7 @@ Parameter(
 ```
 
 **Why This Matters:**
+
 - `_update_option_choices()` is designed for the base `Parameter` class, not specialized types like `ParameterString`
 - `ui_options` with `data` can interfere with dropdown updates
 - `allowed_modes={ParameterMode.PROPERTY}` is the correct pattern for dropdown parameters
@@ -1045,6 +1057,7 @@ Parameter(
 When `after_value_set` calls `_update_selected_item_data()`, it passes data from `all_items` (processed structure), but the method expects raw API data structure.
 
 **❌ WRONG - Expecting raw API structure:**
+
 ```python
 def _update_selected_item_data(self, item_data: dict) -> None:
     # This expects raw ShotGrid API structure
@@ -1054,6 +1067,7 @@ def _update_selected_item_data(self, item_data: dict) -> None:
 ```
 
 **✅ CORRECT - Handle processed data structure:**
+
 ```python
 def _update_selected_item_data(self, item_data: dict) -> None:
     # This works with processed all_items structure
@@ -1064,6 +1078,7 @@ def _update_selected_item_data(self, item_data: dict) -> None:
 **Data Structure Patterns:**
 
 **Raw ShotGrid API Response:**
+
 ```json
 {
   "id": 123,
@@ -1076,6 +1091,7 @@ def _update_selected_item_data(self, item_data: dict) -> None:
 ```
 
 **Processed all_items Structure:**
+
 ```json
 {
   "id": 123,
@@ -1086,6 +1102,7 @@ def _update_selected_item_data(self, item_data: dict) -> None:
 ```
 
 **Key Learning:**
+
 - `all_items` contains processed/flattened data structure
 - `_update_selected_item_data()` must work with processed structure
 - Raw API data is only used during initial fetch and single item refresh
@@ -1093,30 +1110,35 @@ def _update_selected_item_data(self, item_data: dict) -> None:
 #### **🔍 Debugging Process for Dropdown Issues**
 
 **Step 1: Verify Dropdown Updates**
+
 - Check if `_update_option_choices()` is being called
 - Verify parameter name matches exactly
 - Confirm choices list is not empty
 
 **Step 2: Check Parameter Definition**
+
 - Use `Parameter` not `ParameterString` for dropdowns
 - Use `allowed_modes={ParameterMode.PROPERTY}` not `allow_property=True`
 - Avoid `ui_options` with `data` that might interfere
 
 **Step 3: Verify Data Structure Consistency**
+
 - Check if `_update_selected_item_data()` expects the right data structure
 - Raw API data: `item.get("attributes", {}).get("name")`
 - Processed data: `item.get("name")`
 - `all_items` contains processed data, not raw API data
 
 **Step 4: Test Selection Updates**
+
 - Verify `after_value_set` is called when dropdown changes
 - Check if selection matching logic works correctly
 - Ensure `_update_selected_item_data()` is called with correct data
 
 **Common Debugging Questions:**
+
 1. "Is the dropdown updating?" → Check `_update_option_choices()` usage
-2. "Are selections working?" → Check parameter type and data structure
-3. "Are details updating?" → Check `_update_selected_item_data()` data structure handling
+1. "Are selections working?" → Check parameter type and data structure
+1. "Are details updating?" → Check `_update_selected_item_data()` data structure handling
 
 ## 🎯 **Success Criteria:**
 
@@ -1151,9 +1173,9 @@ The project includes a comprehensive Postman collection that contains all ShotGr
 ### **How to Use the Postman Collection:**
 
 1. **Import into Postman**: Load the JSON file into Postman to explore all available endpoints
-2. **Find Specific Endpoints**: Search for keywords like "upload", "create", "update" to find relevant APIs
-3. **Check Request/Response Examples**: Each endpoint includes example requests and responses
-4. **Understand Parameters**: See exactly what query parameters and body fields are required
+1. **Find Specific Endpoints**: Search for keywords like "upload", "create", "update" to find relevant APIs
+1. **Check Request/Response Examples**: Each endpoint includes example requests and responses
+1. **Understand Parameters**: See exactly what query parameters and body fields are required
 
 ### **Key Benefits:**
 
@@ -1186,9 +1208,9 @@ grep -i "_upload" "ShotGrid REST API v1.x.postman_collection.json"
 ### **Pro Tips:**
 
 1. **Search by Feature**: Use `grep` to find all endpoints related to a specific feature
-2. **Check Examples**: Look at the example request/response bodies for data structure
-3. **Verify Parameters**: Ensure you're using the correct query parameters and field names
-4. **Test First**: Use Postman to test endpoints before implementing in code
+1. **Check Examples**: Look at the example request/response bodies for data structure
+1. **Verify Parameters**: Ensure you're using the correct query parameters and field names
+1. **Test First**: Use Postman to test endpoints before implementing in code
 
 ______________________________________________________________________
 
