@@ -6,3 +6,4 @@ example_nodes_template/__pycache__/
 .vscode/
 griptape_cloud/generated/
 Griptape.openapi.yaml
+HOW_TO_ITERATE.md
