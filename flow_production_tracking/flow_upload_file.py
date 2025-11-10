@@ -44,10 +44,6 @@ class FlowUploadFile(BaseShotGridNode):
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
 
-        # Initialize progress bar component
-        self.progress_bar_component = ProgressBarComponent(self)
-        self.progress_bar_component.add_property_parameters()
-
         # Instance variables for async processing
         self._file_data: bytes = b""
         self._original_filename: str = ""
@@ -73,6 +69,14 @@ class FlowUploadFile(BaseShotGridNode):
                 default_value=None,
                 tooltip="The ID of the entity to upload file to.",
                 placeholder_text="Enter entity ID (e.g., 1234)",
+            )
+        )
+        self.add_parameter(
+            ParameterString(
+                name="project_id",
+                default_value=None,
+                tooltip="Project ID for the upload (required for version creation).",
+                placeholder_text="Enter project ID (e.g., 1234)",
             )
         )
         self.add_parameter(
@@ -114,7 +118,15 @@ class FlowUploadFile(BaseShotGridNode):
             ParameterString(
                 name="upload_url",
                 default_value="",
-                tooltip="URL to view the uploaded file in ShotGrid",
+                tooltip="URL to view the uploaded version in ShotGrid",
+                allowed_modes={ParameterMode.OUTPUT},
+            )
+        )
+        self.add_parameter(
+            ParameterString(
+                name="entity_url",
+                default_value="",
+                tooltip="URL to view the entity (Task/Asset/etc.) where the version was uploaded",
                 allowed_modes={ParameterMode.OUTPUT},
             )
         )
@@ -143,6 +155,9 @@ class FlowUploadFile(BaseShotGridNode):
                 allowed_modes={ParameterMode.OUTPUT},
             )
         )
+        # Initialize progress bar component
+        self.progress_bar_component = ProgressBarComponent(self)
+        self.progress_bar_component.add_property_parameters()
         self.add_parameter(
             ParameterString(
                 name="upload_status",
@@ -211,16 +226,42 @@ class FlowUploadFile(BaseShotGridNode):
         logger.warning(f"{self.name}: Could not auto-detect entity type for ID {entity_id}")
         return None
 
+    def _resolve_localhost_url(self, file_path: str) -> str:
+        """Convert localhost workspace URL to absolute filesystem path."""
+        if not file_path.startswith(("http://localhost", "http://127.0.0.1")):
+            return file_path
+
+        # Strip query parameters
+        clean_url = file_path.split("?")[0]
+
+        # Extract the workspace-relative path (after /workspace/)
+        if "/workspace/" in clean_url:
+            workspace_relative = clean_url.split("/workspace/", 1)[1]
+            workspace_path = GriptapeNodes.ConfigManager().workspace_path
+            absolute_path = os.path.join(workspace_path, workspace_relative)
+            # Resolve to handle any .. or . in the path
+            resolved_path = os.path.abspath(absolute_path)
+            logger.info(f"{self.name}: Resolved localhost URL to: {resolved_path}")
+            return resolved_path
+
+        return file_path
+
     def _get_file_data(self, file_path: str) -> tuple[bytes, str, str]:
         """Get file data, filename, and content type from file path or URL."""
         try:
-            # Check if it's a URL
+            # First, try to resolve localhost URLs to filesystem paths
+            file_path = self._resolve_localhost_url(file_path)
+
+            # Check if it's a URL (non-localhost)
             if file_path.startswith(("http://", "https://")):
                 with httpx.Client() as client:
                     response = client.get(file_path)
                     response.raise_for_status()
                     file_data = response.content
-                    filename = os.path.basename(file_path)
+
+                    # Strip query parameters from URL for filename extraction
+                    clean_path = file_path.split("?")[0]
+                    filename = os.path.basename(clean_path)
                     content_type = response.headers.get("content-type", "application/octet-stream")
             else:
                 # Local file
@@ -241,6 +282,20 @@ class FlowUploadFile(BaseShotGridNode):
             logger.error(f"{self.name}: Error reading file {file_path}: {e}")
             raise
 
+    def _get_upload_field(self, content_type: str, filename: str, entity_type: str) -> str:
+        """Determine the appropriate upload field based on file type and entity type."""
+        # Check file extension first
+        ext = filename.lower().split(".")[-1] if "." in filename else ""
+
+        # Only projects with images use field-specific upload
+        if entity_type.lower() == "project" and (
+            ext in ["jpg", "jpeg", "png", "gif", "bmp", "tiff", "webp"] or content_type.startswith("image/")
+        ):
+            return "image"
+
+        # Everything else uses generic upload (no field name)
+        return ""
+
     def _upload_file_to_entity(
         self,
         entity_type: str,
@@ -250,113 +305,153 @@ class FlowUploadFile(BaseShotGridNode):
         content_type: str,
         description: str | None = None,
     ) -> dict:
-        """Upload file to a specific entity using the ShotGrid file upload API."""
+        """Upload file to a specific entity using the ShotGrid Version upload pattern."""
         try:
             access_token = self._get_access_token()
             base_url = self._get_shotgrid_config()["base_url"]
             headers = {"Authorization": f"Bearer {access_token}", "Accept": "application/json"}
 
             with httpx.Client() as client:
-                # Step 1: Get upload URL for the specific entity and field
-                entity_type_lower = entity_type.lower()
-                if entity_type_lower == "humanuser":
-                    entity_type_lower = "human_users"
+                # Step 1: Create a Version entity for all entity types (including Tasks)
+                project_id = self.get_parameter_value("project_id")
+                if not project_id:
+                    raise Exception("Project ID is required for version uploads.")
+
+                # For tasks, fetch the task to get its parent entity
+                parent_entity = None
+                if entity_type.lower() == "task":
+                    task_url = f"{base_url}api/v1/entity/tasks/{entity_id}"
+                    task_response = client.get(task_url, headers=headers, params={"fields": "entity"})
+                    if task_response.status_code == 200:
+                        task_data = task_response.json().get("data", {})
+                        relationships = task_data.get("relationships", {})
+                        entity_rel = relationships.get("entity", {})
+                        if entity_rel.get("data"):
+                            parent_entity = entity_rel["data"]
+
+                version_create_data = {
+                    "code": filename,
+                    "description": description or f"Uploaded: {filename}",
+                    "project": {"type": "Project", "id": int(project_id)},
+                }
+
+                # Link version to entity: use parent entity if task, otherwise the entity itself
+                if entity_type.lower() == "task" and parent_entity:
+                    # For tasks, link to BOTH the parent entity AND the task itself
+                    version_create_data["entity"] = {
+                        "type": parent_entity.get("type", ""),
+                        "id": parent_entity.get("id", 0),
+                    }
+                    # Also link the task directly - try different field names
+                    version_create_data["sg_task"] = {"type": "Task", "id": int(entity_id)}
+                    logger.info(
+                        f"{self.name}: Task {entity_id} belongs to {parent_entity.get('type')} {parent_entity.get('id')}, linking both"
+                    )
                 else:
-                    entity_type_lower = f"{entity_type_lower}s"
+                    version_create_data["entity"] = {"type": entity_type, "id": int(entity_id)}
 
-                # Use the generic upload endpoint (without field name) as shown in Postman collection
-                upload_url = f"{base_url}api/v1/entity/{entity_type_lower}/{entity_id}/_upload?filename={filename}"
+                logger.info(f"{self.name}: Creating version: {version_create_data}")
+                version_response = client.post(
+                    f"{base_url}api/v1/entity/versions",
+                    headers={**headers, "Content-Type": "application/json"},
+                    json=version_create_data,
+                )
+                version_response.raise_for_status()
+                version_data = version_response.json()
+                version_id = version_data["data"]["id"]
 
+                logger.info(f"{self.name}: Created version {version_id}")
+
+                # Step 2: Request upload URL for the version's sg_uploaded_movie field
+                upload_url = (
+                    f"{base_url}api/v1/entity/versions/{version_id}/sg_uploaded_movie/_upload?filename={filename}"
+                )
                 logger.info(f"{self.name}: Requesting upload URL: {upload_url}")
 
-                # Request upload URL for this specific entity and field
-                response = client.get(upload_url, headers=headers)
-                response.raise_for_status()
-                upload_info = response.json()
+                upload_response = client.get(upload_url, headers=headers)
+                upload_response.raise_for_status()
+                upload_info = upload_response.json()
 
                 logger.info(f"{self.name}: Got upload response: {upload_info}")
 
-                # Step 2: Upload file to S3 using the upload link from the response
+                # Step 3: Upload file to S3 (no extra headers - S3 signed URL only expects 'host')
                 upload_link = upload_info["links"]["upload"]
-
-                # S3 signed URLs only expect the 'host' header (as indicated by X-Amz-SignedHeaders=host)
-                # Adding extra headers causes 403 Forbidden errors
+                # S3 signed URLs reject extra headers - only 'host' is signed
                 upload_headers = {}
 
                 logger.info(f"{self.name}: Uploading file to S3: {upload_link}")
-                logger.info(f"{self.name}: S3 upload headers: {upload_headers}")
                 logger.info(f"{self.name}: File size: {len(file_data)} bytes")
 
-                # Note: No auth token needed for S3 upload (credentials are in the URL)
-                upload_response = client.put(upload_link, headers=upload_headers, content=file_data)
-
-                logger.info(f"{self.name}: S3 upload response status: {upload_response.status_code}")
-                if upload_response.status_code != 200:
-                    logger.error(f"{self.name}: S3 upload failed: {upload_response.text}")
-
-                upload_response.raise_for_status()
+                upload_file_response = client.put(upload_link, headers=upload_headers, content=file_data)
+                upload_file_response.raise_for_status()
 
                 logger.info(f"{self.name}: File uploaded successfully to S3")
 
-                # Step 3: Complete the upload using the completion data structure from community examples
-                complete_url = f"{base_url}api/v1/entity/{entity_type_lower}/{entity_id}/_upload"
-                complete_headers = {
-                    "Authorization": f"Bearer {access_token}",
-                    "Content-Type": "application/json",
-                    "Accept": "application/json",
-                }
-
-                # Use the exact completion pattern from the community discussion
-                upload_data = upload_info.get("data", {})
+                # Step 4: Finalize the upload (following community example)
+                complete_url = f"{base_url}{upload_info['links']['complete_upload']}"
                 complete_data = {
                     "upload_info": {
-                        "timestamp": upload_data.get("timestamp", ""),
-                        "upload_type": upload_data.get("upload_type", "Attachment"),
-                        "upload_id": upload_data.get("upload_id"),
-                        "storage_service": upload_data.get("storage_service", "sg"),
-                        "original_filename": upload_data.get("original_filename", filename),
-                        "multipart_upload": upload_data.get("multipart_upload", False),
+                        "timestamp": upload_info["data"].get("timestamp", ""),
+                        "upload_type": upload_info["data"].get("upload_type", ""),
+                        "upload_id": upload_info["data"].get("upload_id"),
+                        "storage_service": upload_info["data"].get("storage_service", "s3"),
+                        "original_filename": upload_info["data"].get("original_filename", filename),
+                        "multipart_upload": upload_info["data"].get("multipart_upload", False),
                     },
-                    "links": upload_info.get("links", {}),
+                    "links": {
+                        "upload": upload_info["links"]["upload"],
+                        "complete_upload": upload_info["links"]["complete_upload"],
+                    },
                     "upload_data": {"display_name": filename},
                 }
 
-                logger.info(f"{self.name}: Completing upload: {complete_url}")
-                complete_response = client.post(complete_url, headers=complete_headers, json=complete_data)
-                complete_response.raise_for_status()
+                logger.info(f"{self.name}: Finalizing upload: {complete_url}")
+                logger.info(f"{self.name}: Finalize data: {complete_data}")
 
-                logger.info(f"{self.name}: Upload completed successfully")
-
-                # Step 4: Create a Version entity linked to the original entity
-                version_data = {
-                    "code": filename,
-                    "description": description or f"Uploaded file: {filename}",
-                    "entity": {"type": entity_type, "id": int(entity_id)},
-                    "sg_path_to_frames": filename,  # This links the uploaded file to the version
+                finalize_headers = {
+                    "Authorization": f"Bearer {access_token}",
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
                 }
 
-                # Create the version
-                version_url = f"{base_url}api/v1/entity/versions"
-                version_response = client.post(version_url, headers=headers, json={"data": version_data})
-                version_response.raise_for_status()
-                created_version = version_response.json()
+                finalize_response = client.post(complete_url, headers=finalize_headers, json=complete_data)
+                finalize_response.raise_for_status()
 
-                logger.info(f"{self.name}: Created version: {created_version}")
+                logger.info(f"{self.name}: Upload finalized successfully")
 
-                # Return the upload info as the result
+                # Return the version info
                 return {
-                    "upload_id": upload_data.get("id"),
+                    "version_id": version_id,
+                    "version_data": version_data["data"],
                     "filename": filename,
                     "entity_type": entity_type,
                     "entity_id": entity_id,
-                    "version_id": created_version["data"]["id"],
-                    "version_data": created_version["data"],
                     "status": "uploaded",
                 }
 
         except Exception as e:
             logger.error(f"{self.name}: Error uploading file: {e}")
             raise
+
+    def _get_version_upload_field(self, content_type: str, filename: str) -> str:
+        """Determine the appropriate upload field for version uploads."""
+        # Check file extension first
+        ext = filename.lower().split(".")[-1] if "." in filename else ""
+
+        # Video files
+        if ext in ["mp4", "mov", "avi", "mkv", "wmv", "flv", "webm"] or content_type.startswith("video/"):
+            return "sg_uploaded_movie"
+
+        # Image files
+        if ext in ["jpg", "jpeg", "png", "gif", "bmp", "tiff", "webp"] or content_type.startswith("image/"):
+            return "sg_uploaded_movie"  # Versions use sg_uploaded_movie for images too
+
+        # Audio files
+        if ext in ["mp3", "wav", "aac", "flac", "ogg", "m4a"] or content_type.startswith("audio/"):
+            return "sg_uploaded_movie"
+
+        # Default to sg_uploaded_movie for everything else
+        return "sg_uploaded_movie"
 
     def process(self) -> AsyncResult[None]:
         """Upload file to the specified entity with progress tracking."""
@@ -452,27 +547,36 @@ class FlowUploadFile(BaseShotGridNode):
                 self.progress_bar_component.increment()
                 self.publish_update_to_parameter("upload_status", "Completing upload...")
 
-                # Generate upload URL pointing to the created version
+                version_id = self._version_data.get("version_id", "")
+                entity_type = self._version_data.get("entity_type", "")
+                entity_id = self._version_data.get("entity_id", "")
+
                 try:
                     base_url = self._get_shotgrid_config()["base_url"]
                     # Convert API URL to web UI URL
                     if base_url.endswith("/api/v1/"):
-                        web_base = base_url.replace("/api/v1/", "/")
+                        web_base = base_url.replace("/api/v1/", "").rstrip("/")
+                    elif base_url.endswith("/api/v1"):
+                        web_base = base_url.replace("/api/v1", "").rstrip("/")
                     else:
                         web_base = base_url.rstrip("/")
-                    # Point to the version detail page
-                    upload_url = f"{web_base}/detail/Version/{self._version_data.get('id', '')}"
+
+                    # Point to the version detail page (works for all entities including tasks)
+                    upload_url = f"{web_base}/detail/Version/{version_id}"
+                    entity_url = f"{web_base}/detail/{entity_type}/{entity_id}"
                 except Exception:
-                    upload_url = f"https://shotgrid.autodesk.com/detail/Version/{self._version_data.get('id', '')}"
+                    upload_url = f"https://shotgrid.autodesk.com/detail/Version/{version_id}"
+                    entity_url = f"https://shotgrid.autodesk.com/detail/{entity_type}/{entity_id}"
 
                 # Update output parameters
                 params = {
                     "upload_url": upload_url,
-                    "version_id": str(self._version_data.get("id", "")),
+                    "entity_url": entity_url,
+                    "version_id": str(version_id),
                     "file_name_output": self._final_filename,
                     "file_size": str(len(self._file_data)),
                     "upload_status": "Success",
-                    "version_data": self._version_data,
+                    "version_data": self._version_data.get("version_data", {}),
                 }
 
                 for param_name, value in params.items():
@@ -482,7 +586,7 @@ class FlowUploadFile(BaseShotGridNode):
                     self.parameter_output_values[param_name] = value
                     self.publish_update_to_parameter(param_name, value)
 
-                logger.info(f"{self.name}: Successfully uploaded {self._final_filename} to {entity_type} {entity_id}")
+                logger.info(f"{self.name}: Successfully uploaded {self._final_filename} to Version {version_id}")
 
             yield _finalize
 

@@ -103,6 +103,16 @@
       }
     },
     {
+      "class_name": "FlowGetProjectInfo",
+      "file_path": "flow_get_project_info.py",
+      "metadata": {
+        "category": "autodesk",
+        "group": "projects",
+        "description": "Griptape Node that retrieves project information with dynamic output parameters for all project attributes.",
+        "display_name": "Get Project Info"
+      }
+    },
+    {
       "class_name": "FlowGetSchemas",
       "file_path": "flow_get_schemas.py",
       "metadata": {
@@ -119,6 +129,16 @@
         "group": "assets",
         "description": "Griptape Node that retrieves available asset types for a specific project.",
         "display_name": "Get Asset Types"
+      }
+    },
+    {
+      "class_name": "FlowGetAssetInfo",
+      "file_path": "flow_get_asset_info.py",
+      "metadata": {
+        "category": "autodesk",
+        "group": "assets",
+        "description": "Griptape Node that retrieves asset information with dynamic output parameters for all asset attributes.",
+        "display_name": "Get Asset Info"
       }
     },
     {
@@ -219,6 +239,36 @@
         "group": "files",
         "description": "Griptape Node that uploads files to any ShotGrid entity, creating a version record with the attached file.",
         "display_name": "Upload File"
+      }
+    },
+    {
+      "class_name": "FlowUpdateVersion",
+      "file_path": "flow_update_version.py",
+      "metadata": {
+        "category": "autodesk",
+        "group": "files",
+        "description": "Griptape Node that updates version information and thumbnail in ShotGrid. Can update code, description, and thumbnail image.",
+        "display_name": "Update Version"
+      }
+    },
+    {
+      "class_name": "FlowGetFilePath",
+      "file_path": "flow_get_file_path.py",
+      "metadata": {
+        "category": "autodesk",
+        "group": "files",
+        "description": "Griptape Node that resolves localhost URLs to filesystem paths or downloads remote URLs to local files.",
+        "display_name": "Get File Path"
+      }
+    },
+    {
+      "class_name": "FlowUpdateEntity",
+      "file_path": "flow_update_entity.py",
+      "metadata": {
+        "category": "autodesk",
+        "group": "general",
+        "description": "Griptape Node that updates any ShotGrid entity (Asset, Shot, Sequence, Project, Task, etc.) with provided field data.",
+        "display_name": "Update Entity"
       }
     }
   ]

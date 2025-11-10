@@ -29,12 +29,12 @@ class AutodeskFlowConfiguration(ControlNode):
             )
 
             Parameter(
-                name="shotgrid_url",
+                name="autodesk_flow_url",
                 type="string",
                 default_value=GriptapeNodes.SecretsManager().get_secret("SHOTGRID_URL") or "",
                 tooltip="Your ShotGrid instance URL (e.g., https://your-company.shotgrid.autodesk.com/)",
                 ui_options={
-                    "display_name": "ShotGrid URL",
+                    "display_name": "Autodesk Flow URL",
                     "placeholder": "https://your-company.shotgrid.autodesk.com/",
                 },
             )
@@ -45,7 +45,7 @@ class AutodeskFlowConfiguration(ControlNode):
         with ParameterGroup(name="Step_2_Script Name") as script_group:
             ParameterMessage(
                 name="step2_message",
-                value="Set the name of your ShotGrid script. \nThis should match the script name you created in ShotGrid Admin > Scripts.\n\nIf you haven't created a script yet, you need to:\n1. Go to ShotGrid Admin > Scripts\n2. Create a new script with the name you want to use\n3. Copy the script key (API key) for use in Step 3",
+                value="Set the name of your Autodesk Flow script. \nThis should match the script name you created in Autodesk Flow Admin > Scripts.\n\nIf you haven't created a script yet, you need to:\n1. Go to Autodesk Flow Admin > Scripts\n2. Create a new script with the name you want to use\n3. Copy the script key (API key) for use in Step 3",
                 button_link="https://help.autodesk.com/view/SGDEV/ENU/?guid=SGD_py_python_api_create_manage_html",
                 button_text="View Flow Documentation",
                 button_icon="book",
@@ -56,7 +56,7 @@ class AutodeskFlowConfiguration(ControlNode):
                 name="script_name",
                 type="string",
                 default_value=GriptapeNodes.SecretsManager().get_secret("SHOTGRID_SCRIPT_NAME") or "gtn",
-                tooltip="Name of the script (should match the script name in ShotGrid)",
+                tooltip="Name of the script (should match the script name in Autodesk Flow)",
                 ui_options={
                     "display_name": "Script Name",
                     "placeholder": "gtn",
@@ -69,7 +69,7 @@ class AutodeskFlowConfiguration(ControlNode):
         with ParameterGroup(name="Step_3_API_Key") as api_key_group:
             ParameterMessage(
                 name="step3_message",
-                value="Configure your ShotGrid API Key (Script Key) in the settings.\n\nIf you don't have one, you can create one in ShotGrid Admin > Scripts,\nor ask your administrator for one.\n\nClick the link and paste the API key into the field.",
+                value="Configure your SHOTGRID_API_KEY (Script Key) in the settings.\n\nIf you don't have one, you can create one in Autodesk Flow Admin > Scripts,\nor ask your administrator for one.\n\nClick the link and paste the API key into the field.",
                 button_link="#settings-secrets?filter=SHOTGRID_API_KEY",
                 button_text="Open Settings",
                 button_icon="key",
@@ -81,7 +81,7 @@ class AutodeskFlowConfiguration(ControlNode):
             # Step 4: Check Configuration
             ParameterMessage(
                 name="step4_message",
-                value="Click the button below to test your ShotGrid configuration and verify everything is working correctly.",
+                value="Click the button below to test your Autodesk Flow configuration and verify everything is working correctly.",
                 button_text="Check Configuration",
                 variant="none",
                 button_icon="check-circle",
@@ -100,7 +100,7 @@ class AutodeskFlowConfiguration(ControlNode):
                 name="configuration_status",
                 type="str",
                 default_value="",
-                tooltip="Test your ShotGrid configuration",
+                tooltip="Test your Autodesk Flow configuration",
                 allowed_modes={ParameterMode.PROPERTY, ParameterMode.OUTPUT},
                 ui_options={"multiline": True, "is_full_width": True, "placeholder_text": "Configuration status..."},
             )
@@ -108,7 +108,7 @@ class AutodeskFlowConfiguration(ControlNode):
 
     def after_value_set(self, parameter: Parameter, value: Any) -> None:
         """Automatically set config values when parameters are changed."""
-        if parameter.name == "shotgrid_url":
+        if parameter.name == "autodesk_flow_url":
             GriptapeNodes.SecretsManager().set_secret("SHOTGRID_URL", value)
         elif parameter.name == "script_name":
             GriptapeNodes.SecretsManager().set_secret("SHOTGRID_SCRIPT_NAME", value)
@@ -116,19 +116,19 @@ class AutodeskFlowConfiguration(ControlNode):
         return super().after_value_set(parameter, value)
 
     def _check_configuration(self, button: Button, button_details: ButtonDetailsMessagePayload) -> NodeMessageResult:  # noqa: ARG002
-        """Check the ShotGrid configuration when button is clicked."""
+        """Check the Autodesk Flow configuration when button is clicked."""
         # Get configuration from parameters
-        shotgrid_url = self.get_parameter_value("shotgrid_url")
+        autodesk_flow_url = self.get_parameter_value("autodesk_flow_url")
         script_name = self.get_parameter_value("script_name")
 
         # Get API key from secrets manager
         api_key = GriptapeNodes.SecretsManager().get_secret("SHOTGRID_API_KEY")
 
         # Validate required fields
-        if not shotgrid_url or not api_key:
+        if not autodesk_flow_url or not api_key:
             status_message = "❌ Configuration incomplete!\n\n"
-            if not shotgrid_url:
-                status_message += "• ShotGrid URL is required\n"
+            if not autodesk_flow_url:
+                status_message += "• Autodesk Flow URL is required\n"
             if not api_key:
                 status_message += "• API Key is required (set via SHOTGRID_API_KEY environment variable)\n"
 
@@ -139,8 +139,8 @@ class AutodeskFlowConfiguration(ControlNode):
             response = OnClickMessageResultPayload(button_details=button_details)
             return NodeMessageResult(success=False, details="Configuration incomplete", response=response)
         # Clean up URL
-        if not shotgrid_url.endswith("/"):
-            shotgrid_url += "/"
+        if not autodesk_flow_url.endswith("/"):
+            autodesk_flow_url += "/"
 
         # Test the configuration
         try:
@@ -148,7 +148,7 @@ class AutodeskFlowConfiguration(ControlNode):
 
             # ShotGrid uses OAuth2 client credentials flow
             # First, get an access token
-            auth_url = f"{shotgrid_url}api/v1/auth/access_token"
+            auth_url = f"{autodesk_flow_url}api/v1/auth/access_token"
             auth_data = {
                 "grant_type": "client_credentials",
                 "client_id": script_name,
@@ -166,7 +166,7 @@ class AutodeskFlowConfiguration(ControlNode):
                         error = error_data["errors"][0]
                         if "Can't authenticate script" in error.get("title", ""):
                             raise Exception(
-                                f"Script '{script_name}' not found or not properly configured in ShotGrid. Please check:\n• Script name is correct\n• Script is created in ShotGrid Admin > Scripts\n• API key matches the script key in ShotGrid"
+                                f"Script '{script_name}' not found or not properly configured in Autodesk Flow. Please check:\n• Script name is correct\n• Script is created in Autodesk Flow Admin > Scripts\n• API key matches the script key in Autodesk Flow"
                             )
                         raise Exception(f"Authentication error: {error.get('title', 'Unknown error')}")
                 except Exception:
@@ -180,7 +180,7 @@ class AutodeskFlowConfiguration(ControlNode):
             access_token = auth_result["access_token"]
 
             # Now test with a simple API call using the access token
-            test_url = f"{shotgrid_url}api/v1/entity/Project"
+            test_url = f"{autodesk_flow_url}api/v1/entity/Project"
             test_params = {"fields": ["id", "name"], "limit": 1}
             test_headers = {"Accept": "application/json", "Authorization": f"Bearer {access_token}"}
 
@@ -189,7 +189,7 @@ class AutodeskFlowConfiguration(ControlNode):
 
             # Configuration is valid
             status_message = "✅ Autodesk Flow configuration is valid!\n\n"
-            status_message += f"📡 URL: {shotgrid_url}\n"
+            status_message += f"📡 URL: {autodesk_flow_url}\n"
             status_message += f"🔑 API Key: {api_key[:8]}...{api_key[-4:]}\n"
             status_message += f"📝 Script: {script_name}\n"
             status_message += "🔐 Using API key authentication\n"
@@ -212,6 +212,6 @@ class AutodeskFlowConfiguration(ControlNode):
             return NodeMessageResult(success=False, details=f"Configuration test failed: {e!s}", response=response)
 
     def process(self) -> None:
-        """Process the ShotGrid configuration."""
+        """Process the Autodesk Flow configuration."""
         # Configuration is now handled by the button click
         # This method is kept for compatibility but doesn't do anything
