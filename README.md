@@ -23,23 +23,30 @@ With these nodes, you can:
 2. **Script Name**: A script name created in Autodesk Flow Admin > Scripts
 3. **API Key**: The script key (API key) for your script
 
-To configure these settings:
+To configure these settings, use the **Autodesk Flow Configuration** node which will walk you through the following steps:
 
-1. Use the **Autodesk Flow Configuration** node to set up your connection
-2. Or manually configure secrets in Settings:
-   - Open the **Settings** menu
-   - Navigate to the **API Keys & Secrets** panel
-   - Add secrets for:
-     - `SHOTGRID_URL`: Your Autodesk Flow instance URL
-     - `SHOTGRID_API_KEY`: Your script key (API key)
-     - `SHOTGRID_SCRIPT_NAME`: Your script name (optional, defaults to "Griptape Nodes")
+1. **Enter your Autodesk Flow URL**: Provide your instance URL (typically in the format: `https://your-company.shotgrid.autodesk.com/`)
+
+2. **Set your Script Name**: Enter the name of your Autodesk Flow script. This should match the script name you created in Autodesk Flow Admin > Scripts.
+   
+   If you haven't created a script yet, you need to:
+   - Go to Autodesk Flow Admin > Scripts
+   - Create a new script with the name you want to use
+   - Copy the script key (API key) for use in the next step
+
+3. **Configure your API Key**: Set your `SHOTGRID_API_KEY` (Script Key) in Settings. The configuration node provides a button to open Settings where you can paste your API key.
+   
+   If you don't have an API key, you can create one in Autodesk Flow Admin > Scripts, or ask your administrator for one.
+
+4. **Check Configuration**: Click the "Check Configuration" button to test your Autodesk Flow configuration and verify everything is working correctly.
 
 ## Installation
 
 To add this library to your Griptape Nodes installation:
 
-1. **Download the library** to your machine in a location you prefer. We recommend creating a folder called `libraries` in your workspace:
+1. **Download the library** to your machine. We recommend creating a folder called `libraries` in your workspace (for example: `/Users/jason/Documents/GriptapeNodes/libraries`). Then download the library to that location:
    ```bash
+   cd /Users/jason/Documents/GriptapeNodes/libraries
    git clone <library_url>
    ```
 
