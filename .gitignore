@@ -7,3 +7,6 @@ example_nodes_template/__pycache__/
 griptape_cloud/generated/
 Griptape.openapi.yaml
 HOW_TO_ITERATE.md
+test_task_templates.py
+mise.toml
+ShotGrid\ REST\ API\ v1.x.postman_collection.json
