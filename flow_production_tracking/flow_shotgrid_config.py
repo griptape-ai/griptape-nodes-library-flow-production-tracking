@@ -20,14 +20,6 @@ class AutodeskFlowConfiguration(ControlNode):
 
         # Step 1: ShotGrid URL
         with ParameterGroup(name="Step_1_Autodesk_Flow_URL") as url_group:
-            ParameterMessage(
-                variant="none",
-                name="step1_message",
-                value="Enter your Autodesk Flow Production Tracking instance URL. \nThis is typically in the format: https://your-company.shotgrid.autodesk.com/",
-                button_link="",
-                button_text="",
-            )
-
             Parameter(
                 name="autodesk_flow_url",
                 type="string",
