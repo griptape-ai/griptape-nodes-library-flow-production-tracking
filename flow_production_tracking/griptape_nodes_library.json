@@ -258,5 +258,10 @@
         "display_name": "Update Entity"
       }
     }
+  ],
+  "workflows": [
+    "workflows/templates/autodesk_flow_getting_started.py",
+    "workflows/templates/autodesk_flow_projects.py",
+    "workflows/templates/autodesk_flow_create_assets.py"
   ]
 }
