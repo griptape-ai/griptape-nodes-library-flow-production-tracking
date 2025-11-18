@@ -10,3 +10,4 @@ HOW_TO_ITERATE.md
 test_task_templates.py
 mise.toml
 ShotGrid\ REST\ API\ v1.x.postman_collection.json
+.DS_Store
