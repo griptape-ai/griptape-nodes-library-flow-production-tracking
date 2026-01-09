@@ -58,6 +58,7 @@ class FlowListAssets(BaseShotGridNode):
                             "Camera",
                             "Light",
                             "Audio",
+                            "Prompt",
                         ]
                     ),
                 },
@@ -309,6 +310,7 @@ class FlowListAssets(BaseShotGridNode):
             "Sound",
             "Music",
             "Voice",
+            "Prompt",
             "Other",
         ]
 
