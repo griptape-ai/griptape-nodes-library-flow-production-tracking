@@ -22,6 +22,7 @@ ENTITY_TYPES = [
     "Asset",
     "Shot",
     "Sequence",
+    "Episode",
     "Project",
     "Task",
     "HumanUser",
@@ -111,7 +112,7 @@ class FlowUpdateEntity(BaseShotGridNode):
             return None
 
         # Try the most common entity types first
-        common_types = ["Asset", "Shot", "Task", "Project", "HumanUser", "Sequence"]
+        common_types = ["Asset", "Shot", "Task", "Project", "HumanUser", "Sequence", "Episode"]
 
         access_token = self._get_access_token()
         base_url = self._get_shotgrid_config()["base_url"]
@@ -193,6 +194,7 @@ class FlowUpdateEntity(BaseShotGridNode):
             "Asset": "sg_asset_type,sg_status_list,project,image",
             "Shot": "sg_sequence,project,sg_status_list,image",
             "Sequence": "project,sg_status_list,image",
+            "Episode": "project,sg_status_list,image",
             "Project": "sg_status,image",
             "Task": "content,sg_status_list,step,task_assignees,project,entity",
             "HumanUser": "email,login,sg_status_list,role,firstname,lastname,image",

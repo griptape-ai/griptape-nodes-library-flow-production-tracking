@@ -271,13 +271,17 @@ class ShotGridAPI:
 
                 # If we didn't find asset types in the schema, provide common defaults
                 if not asset_types:
-                    asset_types = ["Character", "Prop", "Environment", "Vehicle", "FX", "Camera", "Light", "Audio"]
+                    asset_types = ["Character", "Prop", "Environment", "Vehicle", "FX", "Camera", "Light", "Audio", "Prompt"]
+                else:
+                    # Always ensure "Prompt" is in the list, even if not configured in the project
+                    if "Prompt" not in asset_types:
+                        asset_types.append("Prompt")
 
                 return asset_types
 
         except Exception as e:
             logger.error(f"Failed to get asset types for project {project_id}: {e}")
-            return ["Character", "Prop", "Environment", "Vehicle", "FX", "Camera", "Light", "Audio"]
+            return ["Character", "Prop", "Environment", "Vehicle", "FX", "Camera", "Light", "Audio", "Prompt"]
 
     def get_steps(self) -> list[dict]:
         """Get list of available steps"""
