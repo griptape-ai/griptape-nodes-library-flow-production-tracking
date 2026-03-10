@@ -11,6 +11,7 @@ from griptape_nodes.exe_types.core_types import (
 from griptape_nodes.exe_types.node_types import AsyncResult
 from griptape_nodes.exe_types.param_components.progress_bar_component import ProgressBarComponent
 from griptape_nodes.exe_types.param_types.parameter_string import ParameterString
+from griptape_nodes.files.file import File, FileLoadError
 from griptape_nodes.retained_mode.events.parameter_events import SetParameterValueRequest
 from griptape_nodes.retained_mode.griptape_nodes import GriptapeNodes, logger
 from griptape_nodes.traits.file_system_picker import FileSystemPicker
@@ -248,33 +249,18 @@ class FlowUploadFile(BaseShotGridNode):
 
     def _get_file_data(self, file_path: str) -> tuple[bytes, str, str]:
         """Get file data, filename, and content type from file path or URL."""
+        import mimetypes
+
         try:
-            # First, try to resolve localhost URLs to filesystem paths
-            file_path = self._resolve_localhost_url(file_path)
+            file_data = File(file_path).read_bytes()
 
-            # Check if it's a URL (non-localhost)
-            if file_path.startswith(("http://", "https://")):
-                with httpx.Client() as client:
-                    response = client.get(file_path)
-                    response.raise_for_status()
-                    file_data = response.content
+            # Strip query parameters from URL/path for filename extraction
+            clean_path = file_path.split("?")[0]
+            filename = os.path.basename(clean_path)
 
-                    # Strip query parameters from URL for filename extraction
-                    clean_path = file_path.split("?")[0]
-                    filename = os.path.basename(clean_path)
-                    content_type = response.headers.get("content-type", "application/octet-stream")
-            else:
-                # Local file
-                with open(file_path, "rb") as f:
-                    file_data = f.read()
-                filename = os.path.basename(file_path)
-
-                # Try to determine content type from file extension
-                import mimetypes
-
-                content_type, _ = mimetypes.guess_type(file_path)
-                if not content_type:
-                    content_type = "application/octet-stream"
+            content_type, _ = mimetypes.guess_type(clean_path)
+            if not content_type:
+                content_type = "application/octet-stream"
 
             return file_data, filename, content_type
 

@@ -5,6 +5,7 @@ from base_shotgrid_node import BaseShotGridNode
 
 from griptape_nodes.exe_types.core_types import ParameterMode
 from griptape_nodes.exe_types.param_types.parameter_string import ParameterString
+from griptape_nodes.files.file import File, FileLoadError
 from griptape_nodes.retained_mode.griptape_nodes import GriptapeNodes, logger
 from griptape_nodes.traits.file_system_picker import FileSystemPicker
 
@@ -96,14 +97,12 @@ class FlowGetFilePath(BaseShotGridNode):
         local_path = os.path.join(temp_dir, filename)
         logger.info(f"{self.name}: Downloading {url} to {local_path}")
 
-        with httpx.Client() as client:
-            response = client.get(url)
-            response.raise_for_status()
+        file_content = File(url).read_bytes()
 
-            with open(local_path, "wb") as f:
-                f.write(response.content)
+        with open(local_path, "wb") as f:
+            f.write(file_content)
 
-        logger.info(f"{self.name}: Downloaded {len(response.content)} bytes")
+        logger.info(f"{self.name}: Downloaded {len(file_content)} bytes")
         return local_path
 
     def process(self) -> None:
