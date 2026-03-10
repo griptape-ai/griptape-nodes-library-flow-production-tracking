@@ -18,7 +18,7 @@
     "author": "Griptape",
     "description": "Collection of nodes for accessing Flow Production Tracking.",
     "library_version": "0.1.1",
-    "engine_version": "0.39.0",
+    "engine_version": "0.75.0",
     "tags": ["Autodesk", "AI", "Flow Production Tracking"],
     "dependencies": {
       "pip_dependencies": [
