@@ -95,7 +95,7 @@ lint: ## Lint project.
 .PHONY: format
 format: ## Format project.
 	@uv run ruff format
-	@uv run mdformat .
+	@uv run mdformat .github flow_production_tracking *.md
 
 .PHONY: fix
 fix: ## Fix project.
@@ -108,7 +108,7 @@ check: check/format check/lint check/types check/spell ## Run all checks.
 .PHONY: check/format
 check/format:
 	@uv run ruff format --check
-	@uv run mdformat --check .
+	@uv run mdformat --check .github flow_production_tracking *.md
 
 .PHONY: check/lint
 check/lint:
