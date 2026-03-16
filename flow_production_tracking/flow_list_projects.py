@@ -4,8 +4,6 @@ from typing import Any
 
 import httpx
 from base_shotgrid_node import BaseShotGridNode
-from PIL import Image
-
 from griptape_nodes.exe_types.core_types import (
     NodeMessageResult,
     Parameter,
@@ -18,6 +16,7 @@ from griptape_nodes.retained_mode.events.parameter_events import SetParameterVal
 from griptape_nodes.retained_mode.griptape_nodes import GriptapeNodes, logger
 from griptape_nodes.traits.button import Button, ButtonDetailsMessagePayload
 from griptape_nodes.traits.options import Options
+from PIL import Image
 
 # Default choices - will be populated dynamically
 RELOAD_PROJECTS_CHOICE = "Reload to see projects"

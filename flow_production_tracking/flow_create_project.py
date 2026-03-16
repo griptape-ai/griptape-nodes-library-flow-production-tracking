@@ -3,11 +3,10 @@ import urllib.parse
 import httpx
 from base_shotgrid_node import BaseShotGridNode
 from flow_utils import create_shotgrid_api
-from image_utils import convert_image_for_shotgrid, get_mime_type, should_convert_image
-
 from griptape_nodes.exe_types.core_types import Parameter, ParameterGroup, ParameterMessage, ParameterMode
 from griptape_nodes.retained_mode.griptape_nodes import logger
 from griptape_nodes.traits.options import Options
+from image_utils import convert_image_for_shotgrid, get_mime_type, should_convert_image
 
 
 class FlowCreateProject(BaseShotGridNode):
@@ -322,7 +321,7 @@ class FlowCreateProject(BaseShotGridNode):
 
             # Step 4: Upload the file
             logger.info(f"{self.name}: Uploading file")
-            upload_result = self._upload_file_to_url(upload_url, image_bytes, mime_type)
+            self._upload_file_to_url(upload_url, image_bytes, mime_type)
 
             # Step 5: Complete the upload
             logger.info(f"{self.name}: Completing upload")
@@ -750,7 +749,7 @@ class FlowCreateProject(BaseShotGridNode):
             if thumbnail_image and project_id:
                 logger.info(f"{self.name}: Uploading thumbnail for newly created project")
                 try:
-                    upload_id = self._update_project_thumbnail(project_id, thumbnail_image, access_token, base_url)
+                    self._update_project_thumbnail(project_id, thumbnail_image, access_token, base_url)
                     logger.info(f"{self.name}: Thumbnail uploaded successfully")
                 except Exception as e:
                     logger.error(f"{self.name}: Failed to upload thumbnail: {e}")

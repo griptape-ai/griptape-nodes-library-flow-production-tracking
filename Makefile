@@ -1,13 +1,79 @@
+LIBRARY_JSON := griptape-nodes-library.json
+
+.PHONY: version/get
+version/get: ## Get version.
+	@jq -r '.metadata.library_version' $(LIBRARY_JSON)
+
+.PHONY: version/set
+version/set: ## Set version. Usage: make version/set v=1.2.3
+	@jq --arg v "$(v)" '.metadata.library_version = $$v' $(LIBRARY_JSON) > $(LIBRARY_JSON).tmp
+	@mv $(LIBRARY_JSON).tmp $(LIBRARY_JSON)
+	@make version/commit
+
+.PHONY: version/patch
+version/patch: ## Bump patch version.
+	@CURRENT=$$(make version/get); \
+	IFS='.' read -r major minor patch <<< "$$CURRENT"; \
+	NEW_VERSION="$${major}.$${minor}.$$((patch + 1))"; \
+	jq --arg v "$$NEW_VERSION" '.metadata.library_version = $$v' $(LIBRARY_JSON) > $(LIBRARY_JSON).tmp; \
+	mv $(LIBRARY_JSON).tmp $(LIBRARY_JSON); \
+	echo "Bumped to $$NEW_VERSION"
+	@make version/commit
+
+.PHONY: version/minor
+version/minor: ## Bump minor version.
+	@CURRENT=$$(make version/get); \
+	IFS='.' read -r major minor patch <<< "$$CURRENT"; \
+	NEW_VERSION="$${major}.$$((minor + 1)).0"; \
+	jq --arg v "$$NEW_VERSION" '.metadata.library_version = $$v' $(LIBRARY_JSON) > $(LIBRARY_JSON).tmp; \
+	mv $(LIBRARY_JSON).tmp $(LIBRARY_JSON); \
+	echo "Bumped to $$NEW_VERSION"
+	@make version/commit
+
+.PHONY: version/major
+version/major: ## Bump major version.
+	@CURRENT=$$(make version/get); \
+	IFS='.' read -r major minor patch <<< "$$CURRENT"; \
+	NEW_VERSION="$$((major + 1)).0.0"; \
+	jq --arg v "$$NEW_VERSION" '.metadata.library_version = $$v' $(LIBRARY_JSON) > $(LIBRARY_JSON).tmp; \
+	mv $(LIBRARY_JSON).tmp $(LIBRARY_JSON); \
+	echo "Bumped to $$NEW_VERSION"
+	@make version/commit
+
+.PHONY: version/commit
+version/commit: ## Commit version.
+	@git add $(LIBRARY_JSON)
+	@git commit -m "chore: bump v$$(make version/get)"
+
+.PHONY: version/publish
+version/publish: ## Create and push git tags.
+	@git fetch --tags --force
+	@git tag "v$$(make version/get)"
+	@git tag stable -f
+	@git push origin "v$$(make version/get)"
+	@git push -f origin stable
+
+.PHONY: deps/sync
+deps/sync: ## Sync pip_dependencies in the library JSON from pyproject.toml.
+	@uv run python -c "\
+import tomllib, json; \
+pyproject = tomllib.load(open('pyproject.toml', 'rb')); \
+deps = [d for d in pyproject['project']['dependencies'] if not d.startswith('griptape-nodes')]; \
+lib = json.load(open('$(LIBRARY_JSON)')); \
+lib['metadata'].setdefault('dependencies', {})['pip_dependencies'] = deps; \
+open('$(LIBRARY_JSON)', 'w').write(json.dumps(lib, indent=4) + '\n'); \
+print(f'Synced {len(deps)} dependencies to $(LIBRARY_JSON)')"
+
 .PHONY: install
 install: ## Install all dependencies.
 	@make install/all
 
 .PHONY: install/core
-install/core: ## Install core dependencies.
+install/core: deps/sync ## Install core dependencies.
 	@uv sync
 
 .PHONY: install/all
-install/all: ## Install all dependencies.
+install/all: deps/sync ## Install all dependencies.
 	@uv sync --all-groups --all-extras
 
 .PHONY: install/dev
@@ -51,7 +117,7 @@ check/lint:
 .PHONY: check/types
 check/types:
 	@uv run pyright .
-	
+
 .PHONY: check/spell
 check/spell:
 	@uv run typos

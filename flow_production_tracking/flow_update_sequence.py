@@ -3,10 +3,9 @@ from typing import Any
 
 import httpx
 from base_shotgrid_node import BaseShotGridNode
-from image_utils import convert_image_for_shotgrid, get_mime_type, should_convert_image
-
 from griptape_nodes.exe_types.core_types import Parameter, ParameterMode
 from griptape_nodes.retained_mode.griptape_nodes import logger
+from image_utils import convert_image_for_shotgrid, get_mime_type, should_convert_image
 
 
 class FlowUpdateSequence(BaseShotGridNode):
@@ -239,7 +238,7 @@ class FlowUpdateSequence(BaseShotGridNode):
                 raise Exception("Failed to get upload URL from ShotGrid")
 
             logger.info(f"{self.name}: Uploading file")
-            upload_result = self._upload_file_to_url(upload_url, image_bytes, mime_type)
+            self._upload_file_to_url(upload_url, image_bytes, mime_type)
 
             logger.info(f"{self.name}: Completing upload")
             completion_response = self._complete_upload(sequence_id, upload_info, access_token, base_url)
@@ -344,7 +343,7 @@ class FlowUpdateSequence(BaseShotGridNode):
             if thumbnail_image:
                 logger.info(f"{self.name}: Uploading thumbnail for sequence {sequence_id}")
                 try:
-                    upload_id = self._update_sequence_thumbnail(sequence_id, thumbnail_image, access_token, base_url)
+                    self._update_sequence_thumbnail(sequence_id, thumbnail_image, access_token, base_url)
                     logger.info(f"{self.name}: Thumbnail uploaded successfully")
                 except Exception as e:
                     logger.error(f"{self.name}: Failed to upload thumbnail: {e}")
@@ -379,10 +378,3 @@ class FlowUpdateSequence(BaseShotGridNode):
 
         except Exception as e:
             logger.error(f"{self.name} encountered an error: {e!s}")
-
-
-
-
-
-
-
