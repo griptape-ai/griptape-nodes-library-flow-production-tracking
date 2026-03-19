@@ -76,7 +76,7 @@ make version/set v=1.2.3
 
 1. Merge your changes to `main`.
 
-2. Run **Actions > Version Bump (Patch)** or **Actions > Version Bump (Minor)** on `main`. This increments the version in the library JSON and commits the change.
+1. Run **Actions > Version Bump (Patch)** or **Actions > Version Bump (Minor)** on `main`. This increments the version in the library JSON and commits the change.
 
    Or bump locally and push:
 
@@ -86,7 +86,7 @@ make version/set v=1.2.3
    make version/major   # 1.2.3 → 2.0.0
    ```
 
-3. Run **Actions > Version Publish** on `main`. This creates and pushes the version tag (e.g. `v1.2.3`), updates the `stable` tag, and creates a GitHub release with auto-generated release notes.
+1. Run **Actions > Version Publish** on `main`. This creates and pushes the version tag (e.g. `v1.2.3`), updates the `stable` tag, and creates a GitHub release with auto-generated release notes.
 
 ### Patch Release
 
@@ -99,13 +99,13 @@ To release a fix without including all commits on `main`, use a release branch:
    git push -u origin release/v0.50
    ```
 
-2. Cherry-pick the fix commit(s) you want to include:
+1. Cherry-pick the fix commit(s) you want to include:
 
    ```bash
    git cherry-pick <commit-sha>
    git push
    ```
 
-3. Run **Actions > Version Bump (Patch)** and set the branch to `release/v0.50`.
+1. Run **Actions > Version Bump (Patch)** and set the branch to `release/v0.50`.
 
-4. Run **Actions > Version Publish** and set the branch to `release/v0.50`.
+1. Run **Actions > Version Publish** and set the branch to `release/v0.50`.
