@@ -2,7 +2,6 @@ from typing import Any
 
 import httpx
 from base_shotgrid_node import BaseShotGridNode
-
 from griptape_nodes.exe_types.core_types import (
     NodeMessageResult,
     Parameter,
@@ -27,9 +26,9 @@ class FlowListShots(BaseShotGridNode):
         try:
             shotgrid_config = self._get_shotgrid_config()
             base_url = shotgrid_config.get("base_url", "https://shotgrid.autodesk.com/")
-            shots_url = base_url.rstrip("/")
+            base_url.rstrip("/")
         except Exception:
-            shots_url = "https://shotgrid.autodesk.com/shots"
+            pass
 
         self.add_parameter(
             ParameterString(
@@ -164,7 +163,7 @@ class FlowListShots(BaseShotGridNode):
             return
 
         shot_id = shot_data.get("id", "")
-        shot_name = shot_data.get("name", f"Shot {shot_id}")
+        shot_data.get("name", f"Shot {shot_id}")
         shot_code = shot_data.get("code", "")
         shot_description = shot_data.get("description") or shot_data.get("sg_description") or ""
         shot_image = shot_data.get("sg_thumbnail") or shot_data.get("image", "")
@@ -438,10 +437,3 @@ class FlowListShots(BaseShotGridNode):
         except Exception as e:
             logger.error(f"{self.name}: Failed to load shots: {e}")
             self._update_option_choices("selected_shot", ["Error loading shots"], "Error loading shots")
-
-
-
-
-
-
-

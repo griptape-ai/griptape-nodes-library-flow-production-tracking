@@ -2,7 +2,6 @@ from typing import Any
 
 import httpx
 from base_shotgrid_node import BaseShotGridNode
-
 from griptape_nodes.exe_types.core_types import (
     NodeMessageResult,
     Parameter,
@@ -28,10 +27,10 @@ class FlowListAssets(BaseShotGridNode):
             shotgrid_config = self._get_shotgrid_config()
             base_url = shotgrid_config.get("base_url", "https://shotgrid.autodesk.com/")
             # Remove trailing slash and add assets path
-            assets_url = base_url.rstrip("/")
+            base_url.rstrip("/")
         except Exception:
             # Fallback to generic URL if config is not available
-            assets_url = "https://shotgrid.autodesk.com/assets"
+            pass
 
         self.add_parameter(
             ParameterString(
@@ -167,8 +166,8 @@ class FlowListAssets(BaseShotGridNode):
 
         # Extract basic asset info (from processed data structure)
         asset_id = asset_data.get("id", "")
-        asset_name = asset_data.get("name", f"Asset {asset_id}")
-        asset_code = asset_data.get("code", "")
+        asset_data.get("name", f"Asset {asset_id}")
+        asset_data.get("code", "")
         # Try multiple description fields
         asset_description = asset_data.get("description") or asset_data.get("sg_description") or ""
         asset_image = asset_data.get("sg_thumbnail") or asset_data.get("image", "")

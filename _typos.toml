@@ -1,0 +1,3 @@
+[default.extend-words]
+# Typo inside binary-encoded template data; cannot be changed without regenerating the binary
+thumbnal = "thumbnal"

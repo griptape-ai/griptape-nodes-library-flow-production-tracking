@@ -3,10 +3,9 @@ from typing import Any
 
 import httpx
 from base_shotgrid_node import BaseShotGridNode
-from image_utils import convert_image_for_shotgrid, get_mime_type, should_convert_image
-
 from griptape_nodes.exe_types.core_types import Parameter, ParameterMode
 from griptape_nodes.retained_mode.griptape_nodes import logger
+from image_utils import convert_image_for_shotgrid, get_mime_type, should_convert_image
 
 
 class FlowUpdateAsset(BaseShotGridNode):
@@ -286,7 +285,7 @@ class FlowUpdateAsset(BaseShotGridNode):
 
             # Step 4: Upload the file
             logger.info(f"{self.name}: Uploading file")
-            upload_result = self._upload_file_to_url(upload_url, image_bytes, mime_type)
+            self._upload_file_to_url(upload_url, image_bytes, mime_type)
 
             # Step 5: Complete the upload
             logger.info(f"{self.name}: Completing upload")
@@ -444,7 +443,7 @@ class FlowUpdateAsset(BaseShotGridNode):
             if thumbnail_image:
                 logger.info(f"{self.name}: Uploading thumbnail for asset {asset_id}")
                 try:
-                    upload_id = self._update_asset_thumbnail(asset_id, thumbnail_image, access_token, base_url)
+                    self._update_asset_thumbnail(asset_id, thumbnail_image, access_token, base_url)
                     logger.info(f"{self.name}: Thumbnail uploaded successfully")
                 except Exception as e:
                     logger.error(f"{self.name}: Failed to upload thumbnail: {e}")

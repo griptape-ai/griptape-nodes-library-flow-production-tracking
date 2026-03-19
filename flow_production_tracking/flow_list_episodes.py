@@ -2,7 +2,6 @@ from typing import Any
 
 import httpx
 from base_shotgrid_node import BaseShotGridNode
-
 from griptape_nodes.exe_types.core_types import (
     NodeMessageResult,
     Parameter,
@@ -28,10 +27,10 @@ class FlowListEpisodes(BaseShotGridNode):
             shotgrid_config = self._get_shotgrid_config()
             base_url = shotgrid_config.get("base_url", "https://shotgrid.autodesk.com/")
             # Remove trailing slash and add episodes path
-            episodes_url = base_url.rstrip("/")
+            base_url.rstrip("/")
         except Exception:
             # Fallback to generic URL if config is not available
-            episodes_url = "https://shotgrid.autodesk.com/episodes"
+            pass
 
         self.add_parameter(
             ParameterString(
@@ -153,7 +152,7 @@ class FlowListEpisodes(BaseShotGridNode):
 
         # Extract basic episode info (from processed data structure)
         episode_id = episode_data.get("id", "")
-        episode_name = episode_data.get("name", f"Episode {episode_id}")
+        episode_data.get("name", f"Episode {episode_id}")
         episode_code = episode_data.get("code", "")
         # Try multiple description fields
         episode_description = episode_data.get("description") or episode_data.get("sg_description") or ""
@@ -301,9 +300,7 @@ class FlowListEpisodes(BaseShotGridNode):
         url = f"{base_url}api/v1/entity/episodes"
 
         # Add fields to get thumbnail URLs
-        params = {
-            "fields": "id,code,name,sg_status_list,image,sg_thumbnail,project,links,description,sg_description"
-        }
+        params = {"fields": "id,code,name,sg_status_list,image,sg_thumbnail,project,links,description,sg_description"}
 
         with httpx.Client() as client:
             response = client.get(url, headers=headers, params=params)
@@ -435,10 +432,3 @@ class FlowListEpisodes(BaseShotGridNode):
         except Exception as e:
             logger.error(f"{self.name}: Failed to load episodes: {e}")
             self._update_option_choices("selected_episode", ["Error loading episodes"], "Error loading episodes")
-
-
-
-
-
-
-

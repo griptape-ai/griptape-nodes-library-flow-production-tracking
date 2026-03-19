@@ -4,12 +4,11 @@ from typing import Any
 import httpx
 from base_shotgrid_node import BaseShotGridNode
 from flow_utils import create_shotgrid_api
-from image_utils import convert_image_for_shotgrid, get_mime_type, should_convert_image
-
 from griptape_nodes.exe_types.core_types import Parameter, ParameterMode
 from griptape_nodes.exe_types.param_types.parameter_string import ParameterString
 from griptape_nodes.retained_mode.griptape_nodes import logger
 from griptape_nodes.traits.options import Options
+from image_utils import convert_image_for_shotgrid, get_mime_type, should_convert_image
 
 
 class FlowCreateAsset(BaseShotGridNode):
@@ -39,7 +38,19 @@ class FlowCreateAsset(BaseShotGridNode):
                 default_value="Character",
                 tooltip="The type of asset to create (e.g., Character, Prop, Environment).",
                 traits={
-                    Options(choices=["Character", "Prop", "Environment", "Vehicle", "FX", "Camera", "Light", "Audio", "Prompt"])
+                    Options(
+                        choices=[
+                            "Character",
+                            "Prop",
+                            "Environment",
+                            "Vehicle",
+                            "FX",
+                            "Camera",
+                            "Light",
+                            "Audio",
+                            "Prompt",
+                        ]
+                    )
                 },
             )
         )
@@ -133,7 +144,7 @@ class FlowCreateAsset(BaseShotGridNode):
                     # Always ensure "Prompt" is in the list, even if not configured in the project
                     if "Prompt" not in asset_types:
                         asset_types.append("Prompt")
-                    
+
                     # Preserve current selection if it's still valid, otherwise use first item
                     current_selection = self.get_parameter_value("asset_type")
                     if current_selection and current_selection in asset_types:
@@ -149,7 +160,17 @@ class FlowCreateAsset(BaseShotGridNode):
             except Exception as e:
                 logger.warning(f"{self.name}: Could not get asset types for project {value}: {e}")
                 # Fallback to common asset types
-                fallback_types = ["Character", "Prop", "Environment", "Vehicle", "FX", "Camera", "Light", "Audio", "Prompt"]
+                fallback_types = [
+                    "Character",
+                    "Prop",
+                    "Environment",
+                    "Vehicle",
+                    "FX",
+                    "Camera",
+                    "Light",
+                    "Audio",
+                    "Prompt",
+                ]
 
                 # Preserve current selection if it's still valid, otherwise use first item
                 current_selection = self.get_parameter_value("asset_type")

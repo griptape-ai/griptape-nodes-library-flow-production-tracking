@@ -2,7 +2,6 @@ from typing import Any
 
 import httpx
 from base_shotgrid_node import BaseShotGridNode
-
 from griptape_nodes.exe_types.core_types import (
     NodeMessageResult,
     Parameter,
@@ -26,9 +25,9 @@ class FlowListSequences(BaseShotGridNode):
         try:
             shotgrid_config = self._get_shotgrid_config()
             base_url = shotgrid_config.get("base_url", "https://shotgrid.autodesk.com/")
-            sequences_url = base_url.rstrip("/")
+            base_url.rstrip("/")
         except Exception:
-            sequences_url = "https://shotgrid.autodesk.com/sequences"
+            pass
 
         self.add_parameter(
             ParameterString(
@@ -146,7 +145,9 @@ class FlowListSequences(BaseShotGridNode):
                         selected_index = i
                         break
 
-                self._update_selected_sequence_data(sequences[selected_index] if selected_index < len(sequences) else {})
+                self._update_selected_sequence_data(
+                    sequences[selected_index] if selected_index < len(sequences) else {}
+                )
         return super().after_value_set(parameter, value)
 
     def _update_selected_sequence_data(self, sequence_data: dict) -> None:
@@ -155,7 +156,7 @@ class FlowListSequences(BaseShotGridNode):
             return
 
         sequence_id = sequence_data.get("id", "")
-        sequence_name = sequence_data.get("name", f"Sequence {sequence_id}")
+        sequence_data.get("name", f"Sequence {sequence_id}")
         sequence_code = sequence_data.get("code", "")
         sequence_description = sequence_data.get("description") or sequence_data.get("sg_description") or ""
         sequence_image = sequence_data.get("sg_thumbnail") or sequence_data.get("image", "")
@@ -286,9 +287,7 @@ class FlowListSequences(BaseShotGridNode):
         base_url = self._get_shotgrid_config()["base_url"]
         url = f"{base_url}api/v1/entity/sequences"
 
-        params = {
-            "fields": "id,code,name,episode,project,sg_status_list,image,sg_thumbnail,description,sg_description"
-        }
+        params = {"fields": "id,code,name,episode,project,sg_status_list,image,sg_thumbnail,description,sg_description"}
 
         with httpx.Client() as client:
             response = client.get(url, headers=headers, params=params)
@@ -417,10 +416,3 @@ class FlowListSequences(BaseShotGridNode):
         except Exception as e:
             logger.error(f"{self.name}: Failed to load sequences: {e}")
             self._update_option_choices("selected_sequence", ["Error loading sequences"], "Error loading sequences")
-
-
-
-
-
-
-

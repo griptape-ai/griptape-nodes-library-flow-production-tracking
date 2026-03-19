@@ -1,6 +1,5 @@
 import httpx
 from base_shotgrid_node import BaseShotGridNode
-
 from griptape_nodes.exe_types.core_types import Parameter, ParameterMode
 from griptape_nodes.retained_mode.griptape_nodes import logger
 

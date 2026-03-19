@@ -1,5 +1,4 @@
 import httpx
-
 from griptape_nodes.retained_mode.griptape_nodes import logger
 
 
@@ -266,12 +265,22 @@ class ShotGridAPI:
                         if "properties" in sg_asset_type_field and "properties" in sg_asset_type_field["properties"]:
                             # This might contain the allowed values
                             allowed_values = sg_asset_type_field.get("properties", {}).get("properties", {})
-                            for value_key, value_info in allowed_values.items():
+                            for value_key, _value_info in allowed_values.items():
                                 asset_types.append(value_key)
 
                 # If we didn't find asset types in the schema, provide common defaults
                 if not asset_types:
-                    asset_types = ["Character", "Prop", "Environment", "Vehicle", "FX", "Camera", "Light", "Audio", "Prompt"]
+                    asset_types = [
+                        "Character",
+                        "Prop",
+                        "Environment",
+                        "Vehicle",
+                        "FX",
+                        "Camera",
+                        "Light",
+                        "Audio",
+                        "Prompt",
+                    ]
                 else:
                     # Always ensure "Prompt" is in the list, even if not configured in the project
                     if "Prompt" not in asset_types:
@@ -602,7 +611,7 @@ class ShotGridAPI:
         try:
             url = f"{self.base_url}api/v1/entity/users"
             params = {"fields": "id,login,name,email"}
-            
+
             if project_id:
                 params["filter[projects]"] = f"Project.{project_id}"
 
@@ -612,7 +621,7 @@ class ShotGridAPI:
 
                 data = response.json()
                 users = data.get("data", [])
-                
+
                 logger.info(f"Found {len(users)} users")
                 return users
 
@@ -632,7 +641,7 @@ class ShotGridAPI:
 
                 data = response.json()
                 steps = data.get("data", [])
-                
+
                 logger.info(f"Found {len(steps)} steps")
                 return steps
 

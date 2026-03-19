@@ -20,52 +20,57 @@ With these nodes, you can:
 **IMPORTANT:** To use these nodes, you will need:
 
 1. **Autodesk Flow Instance URL**: Your ShotGrid instance URL (e.g., `https://your-company.shotgrid.autodesk.com/`)
-2. **Script Name**: A script name created in Autodesk Flow Admin > Scripts
-3. **API Key**: The script key (API key) for your script
+1. **Script Name**: A script name created in Autodesk Flow Admin > Scripts
+1. **API Key**: The script key (API key) for your script
 
 To configure these settings, use the **Autodesk Flow Configuration** node which will walk you through the following steps:
 
 1. **Enter your Autodesk Flow URL**: Provide your instance URL (typically in the format: `https://your-company.shotgrid.autodesk.com/`)
 
-2. **Set your Script Name**: Enter the name of your Autodesk Flow script. This should match the script name you created in Autodesk Flow Admin > Scripts.
-   
+1. **Set your Script Name**: Enter the name of your Autodesk Flow script. This should match the script name you created in Autodesk Flow Admin > Scripts.
+
    If you haven't created a script yet, you need to:
+
    - Go to Autodesk Flow Admin > Scripts
    - Create a new script with the name you want to use
    - Copy the script key (API key) for use in the next step
 
-3. **Configure your API Key**: Set your `SHOTGRID_API_KEY` (Script Key) in Settings. The configuration node provides a button to open Settings where you can paste your API key.
-   
+1. **Configure your API Key**: Set your `SHOTGRID_API_KEY` (Script Key) in Settings. The configuration node provides a button to open Settings where you can paste your API key.
+
    If you don't have an API key, you can create one in Autodesk Flow Admin > Scripts, or ask your administrator for one.
 
-4. **Check Configuration**: Click the "Check Configuration" button to test your Autodesk Flow configuration and verify everything is working correctly.
+1. **Check Configuration**: Click the "Check Configuration" button to test your Autodesk Flow configuration and verify everything is working correctly.
 
 ## Installation
 
 To add this library to your Griptape Nodes installation:
 
 1. **Download the library** to your machine. We recommend creating a folder called `libraries` in your workspace (for example: `/Users/jason/Documents/GriptapeNodes/libraries`). Then download the library to that location:
-   
+
    **Option A: Download ZIP**
+
    - In GitHub, click the Green **Code** button and choose [Download zip](https://github.com/griptape-ai/griptape-nodes-library-flow-production-tracking/archive/refs/heads/main.zip)
    - Unzip the file (it will be named `griptape-nodes-library-flow-production-tracking-main`)
    - Move the folder to your library location and rename it to `griptape-nodes-library-flow-production-tracking` (remove the `-main` suffix)
-   
+
    **Option B: Using Git** (if you have git installed)
+
    ```bash
    cd /Users/jason/Documents/GriptapeNodes/libraries
    git clone https://github.com/griptape-ai/griptape-nodes-library-flow-production-tracking.git
    ```
 
-2. **Open Griptape Nodes**
+1. **Open Griptape Nodes**
 
-3. **Add the library**:
+1. **Add the library**:
+
    - Go to **Settings** → **Settings** → **Libraries**
    - Click **Add Library**
    - Add the path to the library folder (ex: `/Users/jason/Documents/GriptapeNodes/libraries/`)
    - This will automatically discover all libraries located in that folder!
 
-4. **Reload Libraries**
-    - Close the settings modal and click **Reload Libraries** in the sidebar
+1. **Reload Libraries**
 
-5. Your library will now be available! You can find the nodes in the **Libraries** dropdown on the left sidebar and drag and drop them into your flows.
+   - Close the settings modal and click **Reload Libraries** in the sidebar
+
+1. Your library will now be available! You can find the nodes in the **Libraries** dropdown on the left sidebar and drag and drop them into your flows.
