@@ -1,3 +1,5 @@
+SHELL := /bin/bash
+
 LIBRARY_JSON := flow_production_tracking/griptape_nodes_library.json
 
 .PHONY: version/get
