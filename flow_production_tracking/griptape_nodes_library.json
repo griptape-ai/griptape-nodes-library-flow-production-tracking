@@ -299,6 +299,16 @@
       }
     },
     {
+      "class_name": "FlowCreateNote",
+      "file_path": "flow_create_note.py",
+      "metadata": {
+        "category": "autodesk",
+        "group": "notes",
+        "description": "Griptape Node that creates a new note in ShotGrid. Can link the note to an entity and address it to a user.",
+        "display_name": "Create Note"
+      }
+    },
+    {
       "class_name": "FlowGetEntityInfo",
       "file_path": "flow_get_entity_info.py",
       "metadata": {

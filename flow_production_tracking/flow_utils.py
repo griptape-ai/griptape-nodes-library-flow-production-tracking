@@ -463,6 +463,23 @@ class ShotGridAPI:
             logger.error(f"Failed to create task: {e}")
             return None
 
+    def create_note(self, note_data: dict) -> dict | None:
+        """Create a new note"""
+        try:
+            url = f"{self.base_url}api/v1/entity/notes"
+            headers = {**self.headers, "Content-Type": "application/json"}
+
+            with httpx.Client() as client:
+                response = client.post(url, headers=headers, json=note_data)
+                response.raise_for_status()
+
+                data = response.json()
+                return data.get("data", {})
+
+        except Exception as e:
+            logger.error(f"Failed to create note: {e}")
+            return None
+
     def get_entity_data(self, entity_type: str, entity_id: int, fields: str = "*") -> dict | None:
         """Get data for a specific entity"""
         try:
