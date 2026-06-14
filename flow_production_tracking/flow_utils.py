@@ -463,6 +463,23 @@ class ShotGridAPI:
             logger.error(f"Failed to create task: {e}")
             return None
 
+    def create_entity(self, entity_type_api: str, entity_data: dict) -> dict | None:
+        """Create a new entity of any (API-formatted) type, e.g. 'assets' or 'custom_entity_01'."""
+        try:
+            url = f"{self.base_url}api/v1/entity/{entity_type_api}"
+            headers = {**self.headers, "Content-Type": "application/json"}
+
+            with httpx.Client() as client:
+                response = client.post(url, headers=headers, json=entity_data)
+                response.raise_for_status()
+
+                data = response.json()
+                return data.get("data", {})
+
+        except Exception as e:
+            logger.error(f"Failed to create {entity_type_api}: {e}")
+            return None
+
     def create_note(self, note_data: dict) -> dict | None:
         """Create a new note"""
         try:

@@ -349,6 +349,16 @@
       }
     },
     {
+      "class_name": "FlowCreateEntity",
+      "file_path": "flow_create_entity.py",
+      "metadata": {
+        "category": "autodesk",
+        "group": "general",
+        "description": "Griptape Node that creates a new ShotGrid entity (including custom entities) with user-defined custom field name/value pairs.",
+        "display_name": "Create Entity"
+      }
+    },
+    {
       "class_name": "FlowUpdateEntity",
       "file_path": "flow_update_entity.py",
       "metadata": {
