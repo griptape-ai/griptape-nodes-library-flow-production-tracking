@@ -297,8 +297,8 @@ class FlowCreateEntity(BaseShotGridNode):
         project_id = self.get_parameter_value("project_id")
 
         if not entity_type:
-            logger.error(f"{self.name}: entity_type is required")
-            return
+            msg = f"{self.name}: entity_type is required"
+            raise ValueError(msg)
 
         # Build the create payload from the custom field pairs.
         entity_data = self._collect_custom_fields()
@@ -307,36 +307,33 @@ class FlowCreateEntity(BaseShotGridNode):
         if project_id:
             try:
                 entity_data["project"] = {"type": "Project", "id": int(project_id)}
-            except (ValueError, TypeError):
-                logger.error(f"{self.name}: project_id must be a valid integer")
-                return
+            except (ValueError, TypeError) as e:
+                msg = f"{self.name}: project_id must be a valid integer"
+                raise ValueError(msg) from e
 
         if not entity_data:
-            logger.error(f"{self.name}: No fields provided. Add at least one custom field name/value.")
-            return
+            msg = f"{self.name}: No fields provided. Add at least one custom field name/value."
+            raise ValueError(msg)
 
-        try:
-            access_token = self._get_access_token()
-            base_url = self._get_shotgrid_config()["base_url"]
-            api = create_shotgrid_api(access_token, base_url)
+        access_token = self._get_access_token()
+        base_url = self._get_shotgrid_config()["base_url"]
+        api = create_shotgrid_api(access_token, base_url)
 
-            entity_type_api = entity_type_to_api(entity_type)
-            logger.info(f"{self.name}: Creating {entity_type} ({entity_type_api}) with data: {entity_data}")
+        entity_type_api = entity_type_to_api(entity_type)
+        logger.info(f"{self.name}: Creating {entity_type} ({entity_type_api}) with data: {entity_data}")
 
-            created_entity = api.create_entity(entity_type_api, entity_data)
+        # create_entity raises RuntimeError on a ShotGrid error so it surfaces in the main panel.
+        created_entity = api.create_entity(entity_type_api, entity_data)
 
-            if not created_entity:
-                logger.error(f"{self.name}: Failed to create {entity_type}")
-                return
+        if not created_entity:
+            msg = f"{self.name}: Failed to create {entity_type}"
+            raise RuntimeError(msg)
 
-            entity_id = created_entity.get("id")
-            entity_url = f"{base_url.rstrip('/')}/detail/{entity_type}/{entity_id}"
+        entity_id = created_entity.get("id")
+        entity_url = f"{base_url.rstrip('/')}/detail/{entity_type}/{entity_id}"
 
-            self.parameter_output_values["created_entity"] = created_entity
-            self.parameter_output_values["entity_id"] = str(entity_id)
-            self.parameter_output_values["entity_url"] = entity_url
+        self.parameter_output_values["created_entity"] = created_entity
+        self.parameter_output_values["entity_id"] = str(entity_id)
+        self.parameter_output_values["entity_url"] = entity_url
 
-            logger.info(f"{self.name}: Successfully created {entity_type} {entity_id}")
-
-        except Exception as e:
-            logger.error(f"{self.name}: Error creating entity: {e!s}")
+        logger.info(f"{self.name}: Successfully created {entity_type} {entity_id}")

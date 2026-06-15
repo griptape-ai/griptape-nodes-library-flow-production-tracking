@@ -478,13 +478,10 @@ class ShotGridAPI:
 
         except httpx.HTTPStatusError as e:
             # Surface ShotGrid's actual error detail (e.g. invalid/missing field) instead of just the status line.
-            logger.error(
-                f"Failed to create {entity_type_api}: {e.response.status_code} - {e.response.text}"
-            )
-            return None
-        except Exception as e:
-            logger.error(f"Failed to create {entity_type_api}: {e}")
-            return None
+            detail = f"{e.response.status_code} - {e.response.text}"
+            logger.error(f"Failed to create {entity_type_api}: {detail}")
+            msg = f"ShotGrid rejected create for '{entity_type_api}': {detail}"
+            raise RuntimeError(msg) from e
 
     def create_note(self, note_data: dict) -> dict | None:
         """Create a new note"""
