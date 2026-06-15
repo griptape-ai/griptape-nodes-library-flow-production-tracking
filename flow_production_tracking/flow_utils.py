@@ -483,6 +483,28 @@ class ShotGridAPI:
             msg = f"ShotGrid rejected create for '{entity_type_api}': {detail}"
             raise RuntimeError(msg) from e
 
+    def get_field_schema(self, *entity_type_candidates: str) -> dict:
+        """Read the field schema for an entity type, keyed by field code.
+
+        The schema endpoint's entity-name form varies by instance (PascalCase vs. plural
+        snake_case), so pass candidates in priority order; the first that resolves wins.
+        Best-effort: returns {} if none resolve.
+        """
+        for name in entity_type_candidates:
+            if not name:
+                continue
+            try:
+                url = f"{self.base_url}api/v1/schema/{name}/fields"
+                with httpx.Client() as client:
+                    response = client.get(url, headers=self.headers)
+                    response.raise_for_status()
+                    fields = response.json().get("data", {})
+                    if fields:
+                        return fields
+            except Exception as e:
+                logger.info(f"Field schema lookup failed for '{name}': {e}")
+        return {}
+
     def create_note(self, note_data: dict) -> dict | None:
         """Create a new note"""
         try:

@@ -291,6 +291,42 @@ class FlowCreateEntity(BaseShotGridNode):
 
         return field_data
 
+    @staticmethod
+    def _as_link(value: Any) -> Any:
+        """Reduce an entity dict to the minimal {type, id} link ShotGrid expects."""
+        if isinstance(value, dict) and "type" in value and "id" in value:
+            return {"type": value["type"], "id": value["id"]}
+        return value
+
+    def _conform_value(self, value: Any, data_type: str | None) -> Any:
+        """Reshape a value to match a field's schema data type (entity / multi_entity)."""
+        if data_type == "multi_entity":
+            if isinstance(value, dict):
+                return [self._as_link(value)]
+            if isinstance(value, list):
+                return [self._as_link(v) for v in value]
+            return value
+        if data_type == "entity":
+            if isinstance(value, list) and len(value) == 1:
+                return self._as_link(value[0])
+            return self._as_link(value)
+        return value
+
+    def _conform_to_schema(self, entity_data: dict, field_schema: dict) -> dict:
+        """Conform link fields to the entity's schema so wired/single values fit array fields."""
+        if not field_schema:
+            return entity_data
+
+        conformed = {}
+        for field_code, value in entity_data.items():
+            schema = field_schema.get(field_code) or {}
+            data_type = (schema.get("data_type") or {}).get("value")
+            new_value = self._conform_value(value, data_type)
+            if new_value != value:
+                logger.info(f"{self.name}: Conformed '{field_code}' ({data_type}) to {new_value!r}")
+            conformed[field_code] = new_value
+        return conformed
+
     def process(self) -> None:
         """Create the entity in ShotGrid."""
         entity_type = self.get_parameter_value("entity_type")
@@ -320,6 +356,12 @@ class FlowCreateEntity(BaseShotGridNode):
         api = create_shotgrid_api(access_token, base_url)
 
         entity_type_api = entity_type_to_api(entity_type)
+
+        # Conform link fields (entity / multi_entity) to the entity's schema, so a single
+        # entity object or wired value is wrapped/trimmed to the shape ShotGrid requires.
+        field_schema = api.get_field_schema(entity_type, entity_type_api)
+        entity_data = self._conform_to_schema(entity_data, field_schema)
+
         logger.info(f"{self.name}: Creating {entity_type} ({entity_type_api}) with data: {entity_data}")
 
         # create_entity raises RuntimeError on a ShotGrid error so it surfaces in the main panel.
