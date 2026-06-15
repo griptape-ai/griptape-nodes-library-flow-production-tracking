@@ -476,6 +476,12 @@ class ShotGridAPI:
                 data = response.json()
                 return data.get("data", {})
 
+        except httpx.HTTPStatusError as e:
+            # Surface ShotGrid's actual error detail (e.g. invalid/missing field) instead of just the status line.
+            logger.error(
+                f"Failed to create {entity_type_api}: {e.response.status_code} - {e.response.text}"
+            )
+            return None
         except Exception as e:
             logger.error(f"Failed to create {entity_type_api}: {e}")
             return None

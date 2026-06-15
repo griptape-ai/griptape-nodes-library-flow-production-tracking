@@ -268,6 +268,10 @@ class FlowCreateEntity(BaseShotGridNode):
             if not field_name:
                 continue
 
+            # Skip fields with no value provided; sending null can trigger a 400 on create.
+            if field_value is None or (isinstance(field_value, str) and not field_value.strip()):
+                continue
+
             # Attempt to parse JSON values so link fields can be provided as objects/arrays.
             parsed_value: Any = field_value
             if isinstance(field_value, str):
