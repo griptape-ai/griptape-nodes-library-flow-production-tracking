@@ -1,4 +1,5 @@
 import json
+import re
 from typing import Any
 
 from base_shotgrid_node import BaseShotGridNode
@@ -59,17 +60,20 @@ STATIC_PARAMS = {
 
 
 def entity_type_to_api(entity_type: str) -> str:
-    """Convert a ShotGrid entity type to its REST API path segment.
+    """Convert a ShotGrid entity type to its REST API path segment (plural snake_case).
 
-    e.g. Asset -> assets, HumanUser -> human_users, CustomEntity01 -> custom_entity_01
+    Per the Flow Production Tracking REST API, the entity name is passed in plural
+    snake_case form, e.g.:
+        Asset -> assets
+        HumanUser -> human_users
+        CustomEntity08 -> custom_entity_08s
+        CustomNonProjectEntity01 -> custom_non_project_entity_01s
     """
-    entity_type_lower = entity_type.lower()
-    if entity_type_lower == "humanuser":
-        return "human_users"
-    if entity_type_lower.startswith("customentity"):
-        num = entity_type_lower.replace("customentity", "")
-        return f"custom_entity_{num.zfill(2)}"
-    return f"{entity_type_lower}s"
+    # Underscore between a lower/digit char and a following uppercase letter.
+    s = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", entity_type)
+    # Underscore between a letter and a following digit group (e.g. Entity08 -> Entity_08).
+    s = re.sub(r"(?<=[A-Za-z])(?=\d)", "_", s)
+    return f"{s.lower()}s"
 
 
 class FlowCreateEntity(BaseShotGridNode):
