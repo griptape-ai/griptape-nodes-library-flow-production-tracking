@@ -50,6 +50,7 @@ class FlowListEpisodes(BaseShotGridNode):
                 tooltip="The list of episodes",
                 allowed_modes={ParameterMode.OUTPUT},
                 ui_options={"hide_property": True},
+                serializable=False,
             )
         )
         self.add_parameter(
@@ -158,7 +159,13 @@ class FlowListEpisodes(BaseShotGridNode):
         episode_code = episode_data.get("code", "")
         # Try multiple description fields
         episode_description = episode_data.get("description") or episode_data.get("sg_description") or ""
-        episode_image = episode_data.get("sg_thumbnail") or episode_data.get("image", "")
+        image_url = episode_data.get("sg_thumbnail") or episode_data.get("image") or ""
+        episode_id_str = str(episode_id) if episode_id else ""
+        if image_url:
+            episode_image = self._cache_thumbnail("Episode", episode_id_str, image_url) or image_url
+        else:
+            cached = self._get_thumbnail_cache_path("Episode", episode_id_str)
+            episode_image = str(cached) if cached else ""
 
         # Generate web UI URL
         try:
@@ -223,8 +230,7 @@ class FlowListEpisodes(BaseShotGridNode):
                 logger.warning(f"{self.name}: Failed to fetch fresh data for episode {selected_episode_id}")
                 return None
 
-            _stripped = {k: v for k, v in fresh_episode_data.items() if k not in ("sg_thumbnail", "image")}
-            episodes[selected_index] = _stripped
+            episodes[selected_index] = fresh_episode_data
             GriptapeNodes.handle_request(
                 SetParameterValueRequest(parameter_name="all_episodes", value=episodes, node_name=self.name)
             )
@@ -403,12 +409,11 @@ class FlowListEpisodes(BaseShotGridNode):
             # Process episodes to choices
             episode_list, choices_names = self._process_episodes_to_choices(episodes)
 
-            storable_list = [{k: v for k, v in e.items() if k not in ("sg_thumbnail", "image")} for e in episode_list]
             GriptapeNodes.handle_request(
-                SetParameterValueRequest(parameter_name="all_episodes", value=storable_list, node_name=self.name)
+                SetParameterValueRequest(parameter_name="all_episodes", value=episode_list, node_name=self.name)
             )
-            self.parameter_output_values["all_episodes"] = storable_list
-            self.publish_update_to_parameter("all_episodes", storable_list)
+            self.parameter_output_values["all_episodes"] = episode_list
+            self.publish_update_to_parameter("all_episodes", episode_list)
 
             # Determine what to select
             selected_value = choices_names[0] if choices_names else "No episodes available"

@@ -55,6 +55,7 @@ class FlowListSequences(BaseShotGridNode):
                 tooltip="The list of sequences",
                 allowed_modes={ParameterMode.OUTPUT},
                 ui_options={"hide_property": True},
+                serializable=False,
             )
         )
         self.add_parameter(
@@ -161,7 +162,13 @@ class FlowListSequences(BaseShotGridNode):
         sequence_data.get("name", f"Sequence {sequence_id}")
         sequence_code = sequence_data.get("code", "")
         sequence_description = sequence_data.get("description") or sequence_data.get("sg_description") or ""
-        sequence_image = sequence_data.get("sg_thumbnail") or sequence_data.get("image", "")
+        image_url = sequence_data.get("sg_thumbnail") or sequence_data.get("image") or ""
+        sequence_id_str = str(sequence_id) if sequence_id else ""
+        if image_url:
+            sequence_image = self._cache_thumbnail("Sequence", sequence_id_str, image_url) or image_url
+        else:
+            cached = self._get_thumbnail_cache_path("Sequence", sequence_id_str)
+            sequence_image = str(cached) if cached else ""
 
         try:
             shotgrid_config = self._get_shotgrid_config()
@@ -221,8 +228,7 @@ class FlowListSequences(BaseShotGridNode):
                 logger.warning(f"{self.name}: Failed to fetch fresh data for sequence {selected_sequence_id}")
                 return None
 
-            _stripped = {k: v for k, v in fresh_sequence_data.items() if k not in ("sg_thumbnail", "image")}
-            sequences[selected_index] = _stripped
+            sequences[selected_index] = fresh_sequence_data
             GriptapeNodes.handle_request(
                 SetParameterValueRequest(parameter_name="all_sequences", value=sequences, node_name=self.name)
             )
@@ -394,12 +400,11 @@ class FlowListSequences(BaseShotGridNode):
 
             sequence_list, choices_names = self._process_sequences_to_choices(sequences)
 
-            storable_list = [{k: v for k, v in s.items() if k not in ("sg_thumbnail", "image")} for s in sequence_list]
             GriptapeNodes.handle_request(
-                SetParameterValueRequest(parameter_name="all_sequences", value=storable_list, node_name=self.name)
+                SetParameterValueRequest(parameter_name="all_sequences", value=sequence_list, node_name=self.name)
             )
-            self.parameter_output_values["all_sequences"] = storable_list
-            self.publish_update_to_parameter("all_sequences", storable_list)
+            self.parameter_output_values["all_sequences"] = sequence_list
+            self.publish_update_to_parameter("all_sequences", sequence_list)
 
             selected_value = choices_names[0] if choices_names else "No sequences available"
             selected_index = 0

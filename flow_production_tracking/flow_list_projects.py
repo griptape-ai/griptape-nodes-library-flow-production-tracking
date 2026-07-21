@@ -68,6 +68,7 @@ class FlowListProjects(BaseShotGridNode):
                 tooltip="All projects from ShotGrid.",
                 allowed_modes={ParameterMode.PROPERTY, ParameterMode.OUTPUT},
                 ui_options={"hide_property": True},
+                serializable=False,
             )
         )
         self.add_parameter(
@@ -272,8 +273,13 @@ class FlowListProjects(BaseShotGridNode):
         project_description = project.get("sg_description", "")
         project_url = project.get("url", "")
 
-        # Validate and get a working image
-        validated_image = self._validate_and_get_image(project.get("image"), project_name)
+        project_id_str = str(project.get("id", ""))
+        image_url = project.get("sg_thumbnail") or project.get("image") or ""
+        if image_url:
+            validated_image = self._cache_thumbnail("Project", project_id_str, image_url) or image_url
+        else:
+            cached = self._get_thumbnail_cache_path("Project", project_id_str)
+            validated_image = str(cached) if cached else self._create_fallback_image(project_name)
 
         # Update all project parameters using SetParameterValueRequest
         params = {
@@ -326,8 +332,7 @@ class FlowListProjects(BaseShotGridNode):
                 logger.warning(f"{self.name}: Failed to fetch fresh data for project {selected_project_id}")
                 return None
 
-            _stripped = {k: v for k, v in fresh_project_data.items() if k not in ("sg_thumbnail", "image")}
-            projects[selected_index] = _stripped
+            projects[selected_index] = fresh_project_data
             GriptapeNodes.handle_request(
                 SetParameterValueRequest(parameter_name="all_projects", value=projects, node_name=self.name)
             )
@@ -495,12 +500,11 @@ class FlowListProjects(BaseShotGridNode):
             # Process projects to choices
             project_list, choices_names = self._process_projects_to_choices(projects)
 
-            storable_list = [{k: v for k, v in p.items() if k not in ("sg_thumbnail", "image")} for p in project_list]
             GriptapeNodes.handle_request(
-                SetParameterValueRequest(parameter_name="all_projects", value=storable_list, node_name=self.name)
+                SetParameterValueRequest(parameter_name="all_projects", value=project_list, node_name=self.name)
             )
-            self.parameter_output_values["all_projects"] = storable_list
-            self.publish_update_to_parameter("all_projects", storable_list)
+            self.parameter_output_values["all_projects"] = project_list
+            self.publish_update_to_parameter("all_projects", project_list)
 
             # Determine what to select
             selected_value = choices_names[0] if choices_names else RELOAD_PROJECTS_CHOICE

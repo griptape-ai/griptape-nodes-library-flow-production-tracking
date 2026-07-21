@@ -73,6 +73,7 @@ class FlowListAssets(BaseShotGridNode):
                 tooltip="The list of assets",
                 allowed_modes={ParameterMode.OUTPUT},
                 ui_options={"hide_property": True},
+                serializable=False,
             )
         )
         self.add_parameter(
@@ -172,7 +173,13 @@ class FlowListAssets(BaseShotGridNode):
         asset_data.get("code", "")
         # Try multiple description fields
         asset_description = asset_data.get("description") or asset_data.get("sg_description") or ""
-        asset_image = asset_data.get("sg_thumbnail") or asset_data.get("image", "")
+        image_url = asset_data.get("sg_thumbnail") or asset_data.get("image") or ""
+        asset_id_str = str(asset_id) if asset_id else ""
+        if image_url:
+            asset_image = self._cache_thumbnail("Asset", asset_id_str, image_url) or image_url
+        else:
+            cached = self._get_thumbnail_cache_path("Asset", asset_id_str)
+            asset_image = str(cached) if cached else ""
 
         # Generate web UI URL
         try:
@@ -236,8 +243,7 @@ class FlowListAssets(BaseShotGridNode):
                 logger.warning(f"{self.name}: Failed to fetch fresh data for asset {selected_asset_id}")
                 return None
 
-            _stripped = {k: v for k, v in fresh_asset_data.items() if k not in ("sg_thumbnail", "image")}
-            assets[selected_index] = _stripped
+            assets[selected_index] = fresh_asset_data
             GriptapeNodes.handle_request(
                 SetParameterValueRequest(parameter_name="all_assets", value=assets, node_name=self.name)
             )
@@ -460,12 +466,11 @@ class FlowListAssets(BaseShotGridNode):
             # Process assets to choices
             asset_list, choices_names = self._process_assets_to_choices(assets)
 
-            storable_list = [{k: v for k, v in a.items() if k not in ("sg_thumbnail", "image")} for a in asset_list]
             GriptapeNodes.handle_request(
-                SetParameterValueRequest(parameter_name="all_assets", value=storable_list, node_name=self.name)
+                SetParameterValueRequest(parameter_name="all_assets", value=asset_list, node_name=self.name)
             )
-            self.parameter_output_values["all_assets"] = storable_list
-            self.publish_update_to_parameter("all_assets", storable_list)
+            self.parameter_output_values["all_assets"] = asset_list
+            self.publish_update_to_parameter("all_assets", asset_list)
 
             # Determine what to select
             selected_value = choices_names[0] if choices_names else "No assets available"

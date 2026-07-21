@@ -64,6 +64,7 @@ class FlowListShots(BaseShotGridNode):
                 tooltip="The list of shots",
                 allowed_modes={ParameterMode.OUTPUT},
                 ui_options={"hide_property": True},
+                serializable=False,
             )
         )
         self.add_parameter(
@@ -168,7 +169,13 @@ class FlowListShots(BaseShotGridNode):
         shot_data.get("name", f"Shot {shot_id}")
         shot_code = shot_data.get("code", "")
         shot_description = shot_data.get("description") or shot_data.get("sg_description") or ""
-        shot_image = shot_data.get("sg_thumbnail") or shot_data.get("image", "")
+        image_url = shot_data.get("sg_thumbnail") or shot_data.get("image") or ""
+        shot_id_str = str(shot_id) if shot_id else ""
+        if image_url:
+            shot_image = self._cache_thumbnail("Shot", shot_id_str, image_url) or image_url
+        else:
+            cached = self._get_thumbnail_cache_path("Shot", shot_id_str)
+            shot_image = str(cached) if cached else ""
 
         try:
             shotgrid_config = self._get_shotgrid_config()
@@ -228,8 +235,7 @@ class FlowListShots(BaseShotGridNode):
                 logger.warning(f"{self.name}: Failed to fetch fresh data for shot {selected_shot_id}")
                 return None
 
-            _stripped = {k: v for k, v in fresh_shot_data.items() if k not in ("sg_thumbnail", "image")}
-            shots[selected_index] = _stripped
+            shots[selected_index] = fresh_shot_data
             GriptapeNodes.handle_request(
                 SetParameterValueRequest(parameter_name="all_shots", value=shots, node_name=self.name)
             )
@@ -413,12 +419,11 @@ class FlowListShots(BaseShotGridNode):
 
             shot_list, choices_names = self._process_shots_to_choices(shots)
 
-            storable_list = [{k: v for k, v in s.items() if k not in ("sg_thumbnail", "image")} for s in shot_list]
             GriptapeNodes.handle_request(
-                SetParameterValueRequest(parameter_name="all_shots", value=storable_list, node_name=self.name)
+                SetParameterValueRequest(parameter_name="all_shots", value=shot_list, node_name=self.name)
             )
-            self.parameter_output_values["all_shots"] = storable_list
-            self.publish_update_to_parameter("all_shots", storable_list)
+            self.parameter_output_values["all_shots"] = shot_list
+            self.publish_update_to_parameter("all_shots", shot_list)
 
             selected_value = choices_names[0] if choices_names else "No shots available"
             selected_index = 0

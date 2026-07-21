@@ -1,5 +1,6 @@
 import time
 import urllib.parse
+from pathlib import Path
 
 import httpx
 from griptape_nodes.exe_types.node_types import SuccessFailureNode
@@ -241,6 +242,44 @@ class BaseShotGridNode(SuccessFailureNode):
         except Exception as e:
             logger.error(f"{self.name}: Failed to update {entity_type_plural} thumbnail: {e}")
             raise
+
+    def _get_thumbnail_cache_path(self, entity_type: str, entity_id: str | int) -> Path | None:
+        """Return the cached thumbnail path for an entity if it exists, else None."""
+        if not entity_id:
+            return None
+        cache_dir = Path.home() / ".griptape-nodes" / "shotgrid-thumbnails" / entity_type
+        for ext in ("jpg", "jpeg", "png", "gif", "webp"):
+            path = cache_dir / f"{entity_id}.{ext}"
+            if path.exists():
+                return path
+        return None
+
+    def _cache_thumbnail(self, entity_type: str, entity_id: str | int, url: str) -> str | None:
+        """Download a thumbnail URL, save to local cache, and return the local file path."""
+        if not url or not entity_id:
+            return None
+
+        existing = self._get_thumbnail_cache_path(entity_type, entity_id)
+        if existing:
+            return str(existing)
+
+        try:
+            url_path = urllib.parse.urlparse(url).path
+            ext = url_path.rsplit(".", 1)[-1][:5] if "." in url_path else "jpg"
+
+            cache_dir = Path.home() / ".griptape-nodes" / "shotgrid-thumbnails" / entity_type
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            cache_path = cache_dir / f"{entity_id}.{ext}"
+
+            with httpx.Client() as client:
+                response = client.get(url, follow_redirects=True, timeout=10)
+                response.raise_for_status()
+                cache_path.write_bytes(response.content)
+
+            return str(cache_path)
+        except Exception as e:
+            logger.warning(f"{self.name}: Failed to cache thumbnail for {entity_type}/{entity_id}: {e}")
+            return None
 
     def _get_shotgrid_config(self) -> dict:
         """Get ShotGrid configuration values."""
