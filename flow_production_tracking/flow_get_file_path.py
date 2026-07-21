@@ -2,6 +2,7 @@ import os
 
 from base_shotgrid_node import BaseShotGridNode
 from griptape_nodes.exe_types.core_types import ParameterMode
+from griptape_nodes.exe_types.node_types import AsyncResult
 from griptape_nodes.exe_types.param_types.parameter_string import ParameterString
 from griptape_nodes.files.file import File
 from griptape_nodes.retained_mode.griptape_nodes import GriptapeNodes, logger
@@ -104,7 +105,10 @@ class FlowGetFilePath(BaseShotGridNode):
         logger.info(f"{self.name}: Downloaded {len(file_content)} bytes")
         return local_path
 
-    def process(self) -> None:
+    def process(self) -> AsyncResult[None]:
+        yield lambda: self._do_process()
+
+    def _do_process(self) -> None:
         """Resolve file path from URL or local path."""
         self._clear_execution_status()
         file_input = self.get_parameter_value("file_input")

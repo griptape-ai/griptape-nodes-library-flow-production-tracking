@@ -12,6 +12,7 @@ from griptape_nodes.retained_mode.events.parameter_events import (
     RemoveParameterFromNodeRequest,
     SetParameterValueRequest,
 )
+from griptape_nodes.exe_types.node_types import AsyncResult
 from griptape_nodes.retained_mode.griptape_nodes import GriptapeNodes, logger
 
 
@@ -166,7 +167,10 @@ class FlowGetProjectInfo(BaseShotGridNode):
             if param_name in self.parameter_output_values:
                 del self.parameter_output_values[param_name]
 
-    def process(self) -> None:
+    def process(self) -> AsyncResult[None]:
+        yield lambda: self._do_process()
+
+    def _do_process(self) -> None:
         """Get project information from ShotGrid."""
         self._clear_execution_status()
         project_id = self.get_parameter_value("project_id")

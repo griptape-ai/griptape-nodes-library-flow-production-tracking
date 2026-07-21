@@ -7,7 +7,7 @@ from griptape_nodes.exe_types.core_types import (
     ParameterMessage,
     ParameterMode,
 )
-from griptape_nodes.exe_types.node_types import ControlNode
+from griptape_nodes.exe_types.node_types import AsyncResult, ControlNode
 from griptape_nodes.exe_types.param_types.parameter_button import ParameterButton
 from griptape_nodes.exe_types.param_types.parameter_string import ParameterString
 from griptape_nodes.retained_mode.griptape_nodes import GriptapeNodes
@@ -196,7 +196,10 @@ class AutodeskFlowConfiguration(ControlNode):
             response = OnClickMessageResultPayload(button_details=button_details)
             return NodeMessageResult(success=False, details=f"Configuration test failed: {e!s}", response=response)
 
-    def process(self) -> None:
+    def process(self) -> AsyncResult[None]:
+        yield lambda: self._do_process()
+
+    def _do_process(self) -> None:
         """Process the Autodesk Flow configuration."""
         # Configuration is now handled by the button click
         # This method is kept for compatibility but doesn't do anything

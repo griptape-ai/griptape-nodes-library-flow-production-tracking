@@ -10,6 +10,7 @@ from griptape_nodes.exe_types.core_types import (
 from griptape_nodes.exe_types.param_types.parameter_image import ParameterImage
 from griptape_nodes.exe_types.param_types.parameter_string import ParameterString
 from griptape_nodes.retained_mode.events.parameter_events import SetParameterValueRequest
+from griptape_nodes.exe_types.node_types import AsyncResult
 from griptape_nodes.retained_mode.griptape_nodes import GriptapeNodes, logger
 from griptape_nodes.traits.button import Button, ButtonDetailsMessagePayload
 from griptape_nodes.traits.options import Options
@@ -363,7 +364,10 @@ class FlowListSequences(BaseShotGridNode):
 
         return sequence_list, choices_names
 
-    def process(self) -> None:
+    def process(self) -> AsyncResult[None]:
+        yield lambda: self._do_process()
+
+    def _do_process(self) -> None:
         """Process the node - automatically load sequences when run."""
         self._clear_execution_status()
         try:

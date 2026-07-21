@@ -3,6 +3,7 @@ from base_shotgrid_node import BaseShotGridNode
 from flow_utils import create_shotgrid_api
 from griptape_nodes.exe_types.core_types import Parameter, ParameterGroup, ParameterMessage, ParameterMode
 from griptape_nodes.retained_mode.griptape_nodes import logger
+from griptape_nodes.exe_types.node_types import AsyncResult
 from griptape_nodes.traits.options import Options
 
 
@@ -274,7 +275,10 @@ class FlowCreateProject(BaseShotGridNode):
             logger.error(f"{self.name}: Failed to create project from template: {e}")
             raise
 
-    def process(self) -> None:
+    def process(self) -> AsyncResult[None]:
+        yield lambda: self._do_process()
+
+    def _do_process(self) -> None:
         self._clear_execution_status()
         try:
             # Get input parameters

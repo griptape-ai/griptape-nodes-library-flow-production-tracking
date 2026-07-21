@@ -6,6 +6,7 @@ from griptape_nodes.exe_types.core_types import (
     Parameter,
     ParameterMode,
 )
+from griptape_nodes.exe_types.node_types import AsyncResult
 from griptape_nodes.exe_types.param_types.parameter_string import ParameterString
 from griptape_nodes.retained_mode.events.parameter_events import SetParameterValueRequest
 from griptape_nodes.retained_mode.griptape_nodes import GriptapeNodes, logger
@@ -331,7 +332,10 @@ class FlowUpdateTask(BaseShotGridNode):
             self.parameter_output_values[param_name] = value
             self.publish_update_to_parameter(param_name, value)
 
-    def process(self) -> None:
+    def process(self) -> AsyncResult[None]:
+        yield lambda: self._do_process()
+
+    def _do_process(self) -> None:
         """Update the task with the provided information."""
         self._clear_execution_status()
         try:

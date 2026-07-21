@@ -3,6 +3,7 @@ from typing import Any
 import httpx
 from base_shotgrid_node import BaseShotGridNode
 from griptape_nodes.exe_types.core_types import Parameter, ParameterMode
+from griptape_nodes.exe_types.node_types import AsyncResult
 from griptape_nodes.exe_types.param_types.parameter_string import ParameterString
 from griptape_nodes.retained_mode.events.node_events import ListParametersOnNodeRequest
 from griptape_nodes.retained_mode.events.parameter_events import (
@@ -176,7 +177,10 @@ class FlowGetAssetInfo(BaseShotGridNode):
             if param_name in self.parameter_output_values:
                 del self.parameter_output_values[param_name]
 
-    def process(self) -> None:
+    def process(self) -> AsyncResult[None]:
+        yield lambda: self._do_process()
+
+    def _do_process(self) -> None:
         """Get asset information from ShotGrid."""
         self._clear_execution_status()
         asset_id = self.get_parameter_value("asset_id")

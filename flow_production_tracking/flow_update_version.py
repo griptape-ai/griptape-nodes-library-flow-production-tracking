@@ -3,6 +3,7 @@ from typing import Any
 import httpx
 from base_shotgrid_node import BaseShotGridNode
 from griptape_nodes.exe_types.core_types import Parameter, ParameterMode
+from griptape_nodes.exe_types.node_types import AsyncResult
 from griptape_nodes.retained_mode.griptape_nodes import logger
 
 
@@ -95,7 +96,10 @@ class FlowUpdateVersion(BaseShotGridNode):
         except Exception as e:
             logger.warning(f"{self.name}: Failed to update version_url: {e}")
 
-    def process(self) -> None:
+    def process(self) -> AsyncResult[None]:
+        yield lambda: self._do_process()
+
+    def _do_process(self) -> None:
         self._clear_execution_status()
         try:
             # Get input parameters
