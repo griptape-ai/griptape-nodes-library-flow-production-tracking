@@ -221,7 +221,8 @@ class FlowListSequences(BaseShotGridNode):
                 logger.warning(f"{self.name}: Failed to fetch fresh data for sequence {selected_sequence_id}")
                 return None
 
-            sequences[selected_index] = fresh_sequence_data
+            _stripped = {k: v for k, v in fresh_sequence_data.items() if k not in ("sg_thumbnail", "image")}
+            sequences[selected_index] = _stripped
             GriptapeNodes.handle_request(
                 SetParameterValueRequest(parameter_name="all_sequences", value=sequences, node_name=self.name)
             )
@@ -393,11 +394,12 @@ class FlowListSequences(BaseShotGridNode):
 
             sequence_list, choices_names = self._process_sequences_to_choices(sequences)
 
+            storable_list = [{k: v for k, v in s.items() if k not in ("sg_thumbnail", "image")} for s in sequence_list]
             GriptapeNodes.handle_request(
-                SetParameterValueRequest(parameter_name="all_sequences", value=sequence_list, node_name=self.name)
+                SetParameterValueRequest(parameter_name="all_sequences", value=storable_list, node_name=self.name)
             )
-            self.parameter_output_values["all_sequences"] = sequence_list
-            self.publish_update_to_parameter("all_sequences", sequence_list)
+            self.parameter_output_values["all_sequences"] = storable_list
+            self.publish_update_to_parameter("all_sequences", storable_list)
 
             selected_value = choices_names[0] if choices_names else "No sequences available"
             selected_index = 0

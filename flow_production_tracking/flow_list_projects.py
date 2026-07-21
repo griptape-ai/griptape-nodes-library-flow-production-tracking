@@ -326,8 +326,8 @@ class FlowListProjects(BaseShotGridNode):
                 logger.warning(f"{self.name}: Failed to fetch fresh data for project {selected_project_id}")
                 return None
 
-            # Update the project in all_projects using SetParameterValueRequest
-            projects[selected_index] = fresh_project_data
+            _stripped = {k: v for k, v in fresh_project_data.items() if k not in ("sg_thumbnail", "image")}
+            projects[selected_index] = _stripped
             GriptapeNodes.handle_request(
                 SetParameterValueRequest(parameter_name="all_projects", value=projects, node_name=self.name)
             )
@@ -495,12 +495,12 @@ class FlowListProjects(BaseShotGridNode):
             # Process projects to choices
             project_list, choices_names = self._process_projects_to_choices(projects)
 
-            # Store all projects data first using SetParameterValueRequest
+            storable_list = [{k: v for k, v in p.items() if k not in ("sg_thumbnail", "image")} for p in project_list]
             GriptapeNodes.handle_request(
-                SetParameterValueRequest(parameter_name="all_projects", value=project_list, node_name=self.name)
+                SetParameterValueRequest(parameter_name="all_projects", value=storable_list, node_name=self.name)
             )
-            self.parameter_output_values["all_projects"] = project_list
-            self.publish_update_to_parameter("all_projects", project_list)
+            self.parameter_output_values["all_projects"] = storable_list
+            self.publish_update_to_parameter("all_projects", storable_list)
 
             # Determine what to select
             selected_value = choices_names[0] if choices_names else RELOAD_PROJECTS_CHOICE

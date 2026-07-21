@@ -236,15 +236,14 @@ class FlowListAssets(BaseShotGridNode):
                 logger.warning(f"{self.name}: Failed to fetch fresh data for asset {selected_asset_id}")
                 return None
 
-            # Update the asset in all_assets using SetParameterValueRequest
-            assets[selected_index] = fresh_asset_data
+            _stripped = {k: v for k, v in fresh_asset_data.items() if k not in ("sg_thumbnail", "image")}
+            assets[selected_index] = _stripped
             GriptapeNodes.handle_request(
                 SetParameterValueRequest(parameter_name="all_assets", value=assets, node_name=self.name)
             )
             self.parameter_output_values["all_assets"] = assets
             self.publish_update_to_parameter("all_assets", assets)
 
-            # Update the asset data display
             self._update_selected_asset_data(fresh_asset_data)
 
             logger.info(f"{self.name}: Successfully refreshed asset {selected_asset_id}")
@@ -461,12 +460,12 @@ class FlowListAssets(BaseShotGridNode):
             # Process assets to choices
             asset_list, choices_names = self._process_assets_to_choices(assets)
 
-            # Store all assets data first using SetParameterValueRequest
+            storable_list = [{k: v for k, v in a.items() if k not in ("sg_thumbnail", "image")} for a in asset_list]
             GriptapeNodes.handle_request(
-                SetParameterValueRequest(parameter_name="all_assets", value=asset_list, node_name=self.name)
+                SetParameterValueRequest(parameter_name="all_assets", value=storable_list, node_name=self.name)
             )
-            self.parameter_output_values["all_assets"] = asset_list
-            self.publish_update_to_parameter("all_assets", asset_list)
+            self.parameter_output_values["all_assets"] = storable_list
+            self.publish_update_to_parameter("all_assets", storable_list)
 
             # Determine what to select
             selected_value = choices_names[0] if choices_names else "No assets available"
