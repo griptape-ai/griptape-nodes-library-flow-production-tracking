@@ -481,7 +481,7 @@ class FlowListTasks(BaseShotGridNode):
                                 return {"type": entity_type, "project_id": entity_id}
 
                             # For other entities, get project info from relationships
-                            project_data = entity.get("relationships", {}).get("project", {}).get("data")
+                            project_data = ((entity.get("relationships") or {}).get("project") or {}).get("data")
                             if project_data:
                                 project_id = project_data.get("id")
                                 if project_id:

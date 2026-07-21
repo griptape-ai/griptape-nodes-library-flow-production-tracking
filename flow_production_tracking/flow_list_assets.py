@@ -365,7 +365,7 @@ class FlowListAssets(BaseShotGridNode):
             assets = []
             for asset in all_assets:
                 # Check if asset belongs to the specified project
-                asset_project = asset.get("relationships", {}).get("project", {}).get("data", {})
+                asset_project = ((asset.get("relationships") or {}).get("project") or {}).get("data") or {}
                 asset_project_id = asset_project.get("id")
 
                 if asset_project_id != project_id:
@@ -398,7 +398,7 @@ class FlowListAssets(BaseShotGridNode):
                 "sg_thumbnail": asset.get("attributes", {}).get("sg_thumbnail"),
                 "description": asset.get("attributes", {}).get("description"),
                 "sg_description": asset.get("attributes", {}).get("sg_description"),
-                "project": asset.get("relationships", {}).get("project", {}).get("data", {}).get("id"),
+                "project": (((asset.get("relationships") or {}).get("project") or {}).get("data") or {}).get("id"),
             }
             asset_list.append(asset_data)
 

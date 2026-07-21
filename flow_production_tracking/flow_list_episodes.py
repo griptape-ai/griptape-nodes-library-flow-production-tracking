@@ -315,7 +315,7 @@ class FlowListEpisodes(BaseShotGridNode):
             episodes = []
             for episode in all_episodes:
                 # Check if episode belongs to the specified project
-                episode_project = episode.get("relationships", {}).get("project", {}).get("data", {})
+                episode_project = ((episode.get("relationships") or {}).get("project") or {}).get("data") or {}
                 episode_project_id = episode_project.get("id")
 
                 if episode_project_id != project_id:
@@ -341,7 +341,7 @@ class FlowListEpisodes(BaseShotGridNode):
                 "sg_thumbnail": episode.get("attributes", {}).get("sg_thumbnail"),
                 "description": episode.get("attributes", {}).get("description"),
                 "sg_description": episode.get("attributes", {}).get("sg_description"),
-                "project": episode.get("relationships", {}).get("project", {}).get("data", {}).get("id"),
+                "project": (((episode.get("relationships") or {}).get("project") or {}).get("data") or {}).get("id"),
             }
             episode_list.append(episode_data)
 

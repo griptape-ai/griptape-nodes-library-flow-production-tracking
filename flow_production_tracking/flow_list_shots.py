@@ -310,7 +310,7 @@ class FlowListShots(BaseShotGridNode):
 
             shots = []
             for shot in all_shots:
-                shot_project = shot.get("relationships", {}).get("project", {}).get("data", {})
+                shot_project = ((shot.get("relationships") or {}).get("project") or {}).get("data") or {}
                 shot_project_id = shot_project.get("id")
 
                 if shot_project_id != project_id:
@@ -319,7 +319,7 @@ class FlowListShots(BaseShotGridNode):
                 if sequence_id:
                     try:
                         sequence_id_int = int(sequence_id)
-                        shot_sequence = shot.get("relationships", {}).get("sg_sequence", {}).get("data", {})
+                        shot_sequence = ((shot.get("relationships") or {}).get("sg_sequence") or {}).get("data") or {}
                         shot_sequence_id = shot_sequence.get("id")
                         if shot_sequence_id != sequence_id_int:
                             continue
@@ -329,7 +329,7 @@ class FlowListShots(BaseShotGridNode):
                 if episode_id:
                     try:
                         episode_id_int = int(episode_id)
-                        shot_episode = shot.get("relationships", {}).get("episode", {}).get("data", {})
+                        shot_episode = ((shot.get("relationships") or {}).get("episode") or {}).get("data") or {}
                         shot_episode_id = shot_episode.get("id")
                         if shot_episode_id != episode_id_int:
                             continue
@@ -351,14 +351,14 @@ class FlowListShots(BaseShotGridNode):
                 "id": shot.get("id"),
                 "code": shot.get("attributes", {}).get("code"),
                 "name": shot.get("attributes", {}).get("name"),
-                "sg_sequence": shot.get("relationships", {}).get("sg_sequence", {}).get("data", {}).get("id"),
+                "sg_sequence": (((shot.get("relationships") or {}).get("sg_sequence") or {}).get("data") or {}).get("id"),
                 "sg_status_list": shot.get("attributes", {}).get("sg_status_list"),
                 "image": shot.get("attributes", {}).get("image"),
                 "sg_thumbnail": shot.get("attributes", {}).get("sg_thumbnail"),
                 "description": shot.get("attributes", {}).get("description"),
                 "sg_description": shot.get("attributes", {}).get("sg_description"),
-                "project": shot.get("relationships", {}).get("project", {}).get("data", {}).get("id"),
-                "episode": shot.get("relationships", {}).get("episode", {}).get("data", {}).get("id"),
+                "project": (((shot.get("relationships") or {}).get("project") or {}).get("data") or {}).get("id"),
+                "episode": (((shot.get("relationships") or {}).get("episode") or {}).get("data") or {}).get("id"),
             }
             shot_list.append(shot_data)
 

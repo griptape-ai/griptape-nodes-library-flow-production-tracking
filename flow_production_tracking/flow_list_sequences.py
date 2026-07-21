@@ -300,7 +300,7 @@ class FlowListSequences(BaseShotGridNode):
 
             sequences = []
             for sequence in all_sequences:
-                sequence_project = sequence.get("relationships", {}).get("project", {}).get("data", {})
+                sequence_project = ((sequence.get("relationships") or {}).get("project") or {}).get("data") or {}
                 sequence_project_id = sequence_project.get("id")
 
                 if sequence_project_id != project_id:
@@ -309,7 +309,7 @@ class FlowListSequences(BaseShotGridNode):
                 if episode_id:
                     try:
                         episode_id_int = int(episode_id)
-                        sequence_episode = sequence.get("relationships", {}).get("episode", {}).get("data", {})
+                        sequence_episode = ((sequence.get("relationships") or {}).get("episode") or {}).get("data") or {}
                         sequence_episode_id = sequence_episode.get("id")
                         if sequence_episode_id != episode_id_int:
                             continue
@@ -331,13 +331,13 @@ class FlowListSequences(BaseShotGridNode):
                 "id": sequence.get("id"),
                 "code": sequence.get("attributes", {}).get("code"),
                 "name": sequence.get("attributes", {}).get("name"),
-                "episode": sequence.get("relationships", {}).get("episode", {}).get("data", {}).get("id"),
+                "episode": (((sequence.get("relationships") or {}).get("episode") or {}).get("data") or {}).get("id"),
                 "sg_status_list": sequence.get("attributes", {}).get("sg_status_list"),
                 "image": sequence.get("attributes", {}).get("image"),
                 "sg_thumbnail": sequence.get("attributes", {}).get("sg_thumbnail"),
                 "description": sequence.get("attributes", {}).get("description"),
                 "sg_description": sequence.get("attributes", {}).get("sg_description"),
-                "project": sequence.get("relationships", {}).get("project", {}).get("data", {}).get("id"),
+                "project": (((sequence.get("relationships") or {}).get("project") or {}).get("data") or {}).get("id"),
             }
             sequence_list.append(sequence_data)
 
