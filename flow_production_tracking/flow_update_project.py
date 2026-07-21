@@ -123,6 +123,7 @@ class FlowUpdateProject(BaseShotGridNode):
             thumbnail_image = self.get_parameter_value("thumbnail_image")
 
             if not project_id:
+                self._set_status_results(was_successful=False, result_details="project_id is required")
                 logger.error(f"{self.name}: project_id is required")
                 return
 
@@ -130,6 +131,7 @@ class FlowUpdateProject(BaseShotGridNode):
             try:
                 project_id = int(project_id)
             except (ValueError, TypeError):
+                self._set_status_results(was_successful=False, result_details="project_id must be a valid integer")
                 logger.error(f"{self.name}: project_id must be a valid integer")
                 return
 

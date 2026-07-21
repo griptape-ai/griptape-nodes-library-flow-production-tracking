@@ -61,7 +61,7 @@ class FlowGetSchemas(BaseShotGridNode):
 
                 # Output the schema data
                 self.parameter_output_values["schemas"] = schemas
-                self._set_status_results(was_successful=True, result_details=f"Retrieved schema data")
+                self._set_status_results(was_successful=True, result_details="Retrieved schema data")
 
         except Exception as e:
             self._set_status_results(was_successful=False, result_details=str(e))

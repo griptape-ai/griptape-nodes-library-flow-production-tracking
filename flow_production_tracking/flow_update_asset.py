@@ -133,6 +133,7 @@ class FlowUpdateAsset(BaseShotGridNode):
             thumbnail_image = self.get_parameter_value("thumbnail_image")
 
             if not asset_id:
+                self._set_status_results(was_successful=False, result_details="asset_id is required")
                 logger.error(f"{self.name}: asset_id is required")
                 return
 
@@ -140,6 +141,7 @@ class FlowUpdateAsset(BaseShotGridNode):
             try:
                 asset_id = int(asset_id)
             except (ValueError, TypeError):
+                self._set_status_results(was_successful=False, result_details="asset_id must be a valid integer")
                 logger.error(f"{self.name}: asset_id must be a valid integer")
                 return
 
@@ -218,6 +220,10 @@ class FlowUpdateAsset(BaseShotGridNode):
 
             # Check if we have any updates (fields or thumbnail)
             if not has_updates and not thumbnail_image:
+                self._set_status_results(
+                    was_successful=False,
+                    result_details="At least one field to update or thumbnail must be provided",
+                )
                 logger.error(f"{self.name}: At least one field to update or thumbnail must be provided")
                 return
 

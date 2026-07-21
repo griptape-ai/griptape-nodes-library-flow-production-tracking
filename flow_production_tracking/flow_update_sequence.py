@@ -101,12 +101,14 @@ class FlowUpdateSequence(BaseShotGridNode):
             thumbnail_image = self.get_parameter_value("thumbnail_image")
 
             if not sequence_id:
+                self._set_status_results(was_successful=False, result_details="sequence_id is required")
                 logger.error(f"{self.name}: sequence_id is required")
                 return
 
             try:
                 sequence_id = int(sequence_id)
             except (ValueError, TypeError):
+                self._set_status_results(was_successful=False, result_details="sequence_id must be a valid integer")
                 logger.error(f"{self.name}: sequence_id must be a valid integer")
                 return
 
@@ -166,6 +168,10 @@ class FlowUpdateSequence(BaseShotGridNode):
                     logger.error(f"{self.name}: Failed to upload thumbnail: {e}")
 
             if not has_updates and not thumbnail_image:
+                self._set_status_results(
+                    was_successful=False,
+                    result_details="At least one field to update or thumbnail must be provided",
+                )
                 logger.error(f"{self.name}: At least one field to update or thumbnail must be provided")
                 return
 
