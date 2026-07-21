@@ -1,16 +1,16 @@
 {
   "name": "Flow Production Tracking Library",
-  "library_schema_version": "0.2.0",
+  "library_schema_version": "0.10.0",
   "settings": [
     {
       "description": "Configuration settings for Flow Production Tracking",
-      "category": "Autodesk",
+      "category": "app_events.on_app_initialization_complete",
       "contents": {
-        "secrets_to_register": [
-          "SHOTGRID_API_KEY",
-          "SHOTGRID_SCRIPT_NAME",
-          "SHOTGRID_URL"
-        ]
+        "secrets_to_register": {
+          "SHOTGRID_API_KEY": "",
+          "SHOTGRID_SCRIPT_NAME": "",
+          "SHOTGRID_URL": ""
+        }
       }
     }
   ],
@@ -18,7 +18,7 @@
     "author": "Griptape",
     "description": "Collection of nodes for accessing Flow Production Tracking.",
     "library_version": "0.1.8",
-    "engine_version": "0.75.0",
+    "engine_version": "0.93.0",
     "tags": ["Autodesk", "AI", "Flow Production Tracking"],
     "dependencies": {
       "pip_dependencies": [
@@ -46,7 +46,9 @@
         "category": "autodesk",
         "group": "configuration",
         "description": "Configure Autodesk Flow Production Tracking connection settings including URL, API key, and optional user credentials.",
-        "display_name": "Autodesk Flow Configuration"
+        "display_name": "Autodesk Flow Configuration",
+        "icon": "Settings",
+        "tags": ["autodesk", "flow", "configuration", "api"]
       }
     },
     {
@@ -56,7 +58,9 @@
         "category": "autodesk",
         "group": "projects",
         "description": "Griptape Node that lists all projects in ShotGrid.",
-        "display_name": "List Projects"
+        "display_name": "List Projects",
+        "icon": "list",
+        "tags": ["autodesk", "flow", "projects", "list"]
       }
     },
     {
@@ -66,7 +70,9 @@
         "category": "autodesk",
         "group": "projects",
         "description": "Griptape Node that creates a new project in ShotGrid. Can optionally upload a thumbnail image for the project.",
-        "display_name": "Create Project"
+        "display_name": "Create Project",
+        "icon": "FolderPlus",
+        "tags": ["autodesk", "flow", "projects", "create"]
       }
     },
     {
@@ -76,7 +82,9 @@
         "category": "autodesk",
         "group": "projects",
         "description": "Griptape Node that updates project information and thumbnail in ShotGrid. Can update name, code, description, and thumbnail image.",
-        "display_name": "Update Project"
+        "display_name": "Update Project",
+        "icon": "folder-edit",
+        "tags": ["autodesk", "flow", "projects", "update"]
       }
     },
     {
@@ -86,7 +94,9 @@
         "category": "autodesk",
         "group": "projects",
         "description": "Griptape Node that retrieves a single project by ID from ShotGrid. Returns complete project data including thumbnail information.",
-        "display_name": "Get Project"
+        "display_name": "Get Project",
+        "icon": "Folder",
+        "tags": ["autodesk", "flow", "projects", "get"]
       }
     },
     {
@@ -96,7 +106,9 @@
         "category": "autodesk",
         "group": "projects",
         "description": "Griptape Node that retrieves project information with dynamic output parameters for all project attributes.",
-        "display_name": "Get Project Info"
+        "display_name": "Get Project Info",
+        "icon": "info",
+        "tags": ["autodesk", "flow", "projects", "info"]
       }
     },
     {
@@ -105,7 +117,9 @@
       "metadata": {
         "category": "autodesk",
         "description": "Griptape Node that retrieves ShotGrid schema information for entities.",
-        "display_name": "Get Schemas"
+        "display_name": "Get Schemas",
+        "icon": "braces",
+        "tags": ["autodesk", "flow", "schema", "data"]
       }
     },
     {
@@ -115,7 +129,9 @@
         "category": "autodesk",
         "group": "assets",
         "description": "Griptape Node that retrieves available asset types for a specific project.",
-        "display_name": "Get Asset Types"
+        "display_name": "Get Asset Types",
+        "icon": "list",
+        "tags": ["autodesk", "flow", "assets", "types"]
       }
     },
     {
@@ -125,7 +141,9 @@
         "category": "autodesk",
         "group": "assets",
         "description": "Griptape Node that retrieves asset information with dynamic output parameters for all asset attributes.",
-        "display_name": "Get Asset Info"
+        "display_name": "Get Asset Info",
+        "icon": "info",
+        "tags": ["autodesk", "flow", "assets", "info"]
       }
     },
     {
@@ -135,7 +153,9 @@
         "category": "autodesk",
         "group": "assets",
         "description": "Griptape Node that lists assets in a project with filtering by asset type.",
-        "display_name": "List Assets"
+        "display_name": "List Assets",
+        "icon": "list",
+        "tags": ["autodesk", "flow", "assets", "list"]
       }
     },
     {
@@ -145,7 +165,9 @@
         "category": "autodesk",
         "group": "episodes",
         "description": "Griptape Node that lists episodes in a project.",
-        "display_name": "List Episodes"
+        "display_name": "List Episodes",
+        "icon": "film",
+        "tags": ["autodesk", "flow", "episodes", "list"]
       }
     },
     {
@@ -155,7 +177,9 @@
         "category": "autodesk",
         "group": "episodes",
         "description": "Griptape Node that creates a new episode in a ShotGrid project. Can optionally upload a thumbnail image.",
-        "display_name": "Create Episode"
+        "display_name": "Create Episode",
+        "icon": "film",
+        "tags": ["autodesk", "flow", "episodes", "create"]
       }
     },
     {
@@ -165,7 +189,9 @@
         "category": "autodesk",
         "group": "episodes",
         "description": "Griptape Node that updates episode information and thumbnail in ShotGrid. Can update code, description, and thumbnail image.",
-        "display_name": "Update Episode"
+        "display_name": "Update Episode",
+        "icon": "film",
+        "tags": ["autodesk", "flow", "episodes", "update"]
       }
     },
     {
@@ -175,7 +201,9 @@
         "category": "autodesk",
         "group": "shots",
         "description": "Griptape Node that lists shots in a project with optional filtering by sequence and episode.",
-        "display_name": "List Shots"
+        "display_name": "List Shots",
+        "icon": "camera",
+        "tags": ["autodesk", "flow", "shots", "list"]
       }
     },
     {
@@ -185,7 +213,9 @@
         "category": "autodesk",
         "group": "shots",
         "description": "Griptape Node that creates a new shot in a ShotGrid project. Requires project and sequence. Episode is optional if project uses episodes. Can optionally upload a thumbnail image.",
-        "display_name": "Create Shot"
+        "display_name": "Create Shot",
+        "icon": "camera",
+        "tags": ["autodesk", "flow", "shots", "create"]
       }
     },
     {
@@ -195,7 +225,9 @@
         "category": "autodesk",
         "group": "shots",
         "description": "Griptape Node that updates shot information and thumbnail in ShotGrid. Can update code, description, and thumbnail image.",
-        "display_name": "Update Shot"
+        "display_name": "Update Shot",
+        "icon": "camera",
+        "tags": ["autodesk", "flow", "shots", "update"]
       }
     },
     {
@@ -205,7 +237,9 @@
         "category": "autodesk",
         "group": "sequences",
         "description": "Griptape Node that lists sequences in a project with optional filtering by episode.",
-        "display_name": "List Sequences"
+        "display_name": "List Sequences",
+        "icon": "list-ordered",
+        "tags": ["autodesk", "flow", "sequences", "list"]
       }
     },
     {
@@ -215,7 +249,9 @@
         "category": "autodesk",
         "group": "sequences",
         "description": "Griptape Node that creates a new sequence in a ShotGrid project. Requires project. Episode is optional if project uses episodes. Can optionally upload a thumbnail image.",
-        "display_name": "Create Sequence"
+        "display_name": "Create Sequence",
+        "icon": "list-ordered",
+        "tags": ["autodesk", "flow", "sequences", "create"]
       }
     },
     {
@@ -225,7 +261,9 @@
         "category": "autodesk",
         "group": "sequences",
         "description": "Griptape Node that updates sequence information and thumbnail in ShotGrid. Can update code, description, and thumbnail image.",
-        "display_name": "Update Sequence"
+        "display_name": "Update Sequence",
+        "icon": "list-ordered",
+        "tags": ["autodesk", "flow", "sequences", "update"]
       }
     },
     {
@@ -235,7 +273,9 @@
         "category": "autodesk",
         "group": "assets",
         "description": "Griptape Node that creates a new asset in a ShotGrid project.",
-        "display_name": "Create Asset"
+        "display_name": "Create Asset",
+        "icon": "box",
+        "tags": ["autodesk", "flow", "assets", "create"]
       }
     },
     {
@@ -245,7 +285,9 @@
         "category": "autodesk",
         "group": "assets",
         "description": "Griptape Node that updates asset information in ShotGrid.",
-        "display_name": "Update Asset"
+        "display_name": "Update Asset",
+        "icon": "box",
+        "tags": ["autodesk", "flow", "assets", "update"]
       }
     },
     {
@@ -255,7 +297,9 @@
         "category": "autodesk",
         "group": "tasks",
         "description": "Griptape Node that lists tasks for an asset, shot, or project in ShotGrid.",
-        "display_name": "List Tasks"
+        "display_name": "List Tasks",
+        "icon": "clipboard-list",
+        "tags": ["autodesk", "flow", "tasks", "list"]
       }
     },
     {
@@ -265,7 +309,9 @@
         "category": "autodesk",
         "group": "tasks",
         "description": "Griptape Node that creates a new task in ShotGrid.",
-        "display_name": "Create Task"
+        "display_name": "Create Task",
+        "icon": "clipboard-plus",
+        "tags": ["autodesk", "flow", "tasks", "create"]
       }
     },
     {
@@ -275,7 +321,9 @@
         "category": "autodesk",
         "group": "tasks",
         "description": "Griptape Node that updates task information in ShotGrid.",
-        "display_name": "Update Task"
+        "display_name": "Update Task",
+        "icon": "clipboard",
+        "tags": ["autodesk", "flow", "tasks", "update"]
       }
     },
     {
@@ -285,7 +333,9 @@
         "category": "autodesk",
         "group": "tasks",
         "description": "Griptape Node that gets task status and information from ShotGrid.",
-        "display_name": "Get Task Status"
+        "display_name": "Get Task Status",
+        "icon": "check-circle",
+        "tags": ["autodesk", "flow", "tasks", "status"]
       }
     },
     {
@@ -295,7 +345,9 @@
         "category": "autodesk",
         "group": "users",
         "description": "Griptape Node that lists users in ShotGrid with optional project filtering.",
-        "display_name": "List Users"
+        "display_name": "List Users",
+        "icon": "Users",
+        "tags": ["autodesk", "flow", "users", "list"]
       }
     },
     {
@@ -305,7 +357,9 @@
         "category": "autodesk",
         "group": "general",
         "description": "Griptape Node that gets detailed information about any ShotGrid entity (Asset, Shot, Sequence, Project, Task, User, etc.) by entity type and ID.",
-        "display_name": "Get Entity Info"
+        "display_name": "Get Entity Info",
+        "icon": "info",
+        "tags": ["autodesk", "flow", "entity", "info"]
       }
     },
     {
@@ -315,7 +369,9 @@
         "category": "autodesk",
         "group": "files",
         "description": "Griptape Node that uploads files to any ShotGrid entity, creating a version record with the attached file.",
-        "display_name": "Upload File"
+        "display_name": "Upload File",
+        "icon": "file-up",
+        "tags": ["autodesk", "flow", "files", "upload"]
       }
     },
     {
@@ -325,7 +381,9 @@
         "category": "autodesk",
         "group": "files",
         "description": "Griptape Node that updates version information and thumbnail in ShotGrid. Can update code, description, and thumbnail image.",
-        "display_name": "Update Version"
+        "display_name": "Update Version",
+        "icon": "file-edit",
+        "tags": ["autodesk", "flow", "files", "version", "update"]
       }
     },
     {
@@ -335,7 +393,9 @@
         "category": "autodesk",
         "group": "files",
         "description": "Griptape Node that resolves localhost URLs to filesystem paths or downloads remote URLs to local files.",
-        "display_name": "Get File Path"
+        "display_name": "Get File Path",
+        "icon": "file-search",
+        "tags": ["autodesk", "flow", "files", "path"]
       }
     },
     {
@@ -345,7 +405,9 @@
         "category": "autodesk",
         "group": "general",
         "description": "Griptape Node that updates any ShotGrid entity (Asset, Shot, Sequence, Project, Task, etc.) with provided field data.",
-        "display_name": "Update Entity"
+        "display_name": "Update Entity",
+        "icon": "database",
+        "tags": ["autodesk", "flow", "entity", "update"]
       }
     }
   ],

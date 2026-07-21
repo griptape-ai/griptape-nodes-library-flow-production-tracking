@@ -6,12 +6,15 @@ authors = [
     {name = "Jason Schleifer", email = "jason@griptape.ai"}
 ]
 readme = "README.md"
-requires-python = "~=3.12.0"
+requires-python = ">=3.12,<3.13"
 dependencies = [
-    "griptape-nodes",
+    "griptape-nodes-engine>=0.93.0",
     "httpx",
     "Pillow",
 ]
+
+[tool.uv.sources]
+griptape-nodes-engine = { git = "https://github.com/griptape-ai/griptape-nodes-engine", rev = "latest" }
 
 [build-system]
 requires = ["hatchling"]
