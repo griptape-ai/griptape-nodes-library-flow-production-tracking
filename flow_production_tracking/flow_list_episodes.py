@@ -371,8 +371,8 @@ class FlowListEpisodes(BaseShotGridNode):
         return episode_list, choices_names
 
     def process(self) -> None:
-        self._clear_execution_status()
         """Process the node - automatically load episodes when run."""
+        self._clear_execution_status()
         try:
             # Get current selection to preserve it
             current_selection = self.get_parameter_value("selected_episode")
@@ -380,6 +380,7 @@ class FlowListEpisodes(BaseShotGridNode):
             # Get input parameters
             project_id = self.get_parameter_value("project_id")
             if not project_id:
+                self._set_status_results(was_successful=False, result_details="project_id is required")
                 logger.warning(f"{self.name}: project_id is required")
                 self._update_option_choices("selected_episode", ["No project selected"], "No project selected")
                 return
@@ -389,6 +390,9 @@ class FlowListEpisodes(BaseShotGridNode):
             episodes = self._fetch_episodes_from_api()
 
             if not episodes:
+                self._set_status_results(
+                    was_successful=True, result_details=f"No episodes found for project {project_id}"
+                )
                 logger.warning(f"{self.name}: No episodes found for project {project_id}")
                 self._update_option_choices("selected_episode", ["No episodes available"], "No episodes available")
                 return

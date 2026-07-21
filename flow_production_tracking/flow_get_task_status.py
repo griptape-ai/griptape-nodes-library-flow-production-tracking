@@ -169,13 +169,14 @@ class FlowGetTaskStatus(BaseShotGridNode):
             logger.warning(f"{self.name}: Failed to update task_url: {e}")
 
     def process(self) -> None:
-        self._clear_execution_status()
         """Get comprehensive task information when process is run."""
+        self._clear_execution_status()
         try:
             # Get input parameters
             task_id = self.get_parameter_value("task_id")
 
             if not task_id:
+                self._set_status_results(was_successful=False, result_details="task_id is required")
                 logger.error(f"{self.name}: task_id is required")
                 self._clear_all_outputs()
                 return
@@ -184,6 +185,7 @@ class FlowGetTaskStatus(BaseShotGridNode):
             try:
                 task_id = int(task_id)
             except (ValueError, TypeError):
+                self._set_status_results(was_successful=False, result_details="task_id must be a valid integer")
                 logger.error(f"{self.name}: task_id must be a valid integer")
                 self._clear_all_outputs()
                 return
@@ -195,6 +197,10 @@ class FlowGetTaskStatus(BaseShotGridNode):
             # Fetch task data
             task_data = self._fetch_task_data(task_id, access_token, base_url)
             if not task_data:
+                self._set_status_results(
+                    was_successful=False,
+                    result_details=f"Could not retrieve task data for task {task_id}",
+                )
                 logger.error(f"{self.name}: Could not retrieve task data for task {task_id}")
                 self._clear_all_outputs()
                 return

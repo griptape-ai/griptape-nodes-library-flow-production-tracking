@@ -350,8 +350,8 @@ class FlowListUsers(BaseShotGridNode):
             return users
 
     def process(self) -> None:
-        self._clear_execution_status()
         """Process the node - automatically load users when run."""
+        self._clear_execution_status()
         try:
             # Get current selection to preserve it
             current_selection = self.get_parameter_value("selected_user")
@@ -361,6 +361,7 @@ class FlowListUsers(BaseShotGridNode):
             users = self._fetch_users_from_api()
 
             if not users:
+                self._set_status_results(was_successful=True, result_details="No users found")
                 logger.warning(f"{self.name}: No users found")
                 self._update_option_choices("selected_user", ["No users available"], "No users available")
                 return

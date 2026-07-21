@@ -332,18 +332,20 @@ class FlowUpdateTask(BaseShotGridNode):
             self.publish_update_to_parameter(param_name, value)
 
     def process(self) -> None:
-        self._clear_execution_status()
         """Update the task with the provided information."""
+        self._clear_execution_status()
         try:
             # Get and validate task ID
             task_id = self.get_parameter_value("task_id")
             if not task_id:
+                self._set_status_results(was_successful=False, result_details="Task ID is required")
                 logger.error(f"{self.name}: Task ID is required")
                 return
 
             # Prepare update data
             update_data = self._prepare_update_data()
             if not update_data:
+                self._set_status_results(was_successful=False, result_details="No fields to update")
                 logger.warning(f"{self.name}: No fields to update")
                 return
 
@@ -367,6 +369,7 @@ class FlowUpdateTask(BaseShotGridNode):
                 task_data = updated_data.get("data", {})
 
                 if not task_data:
+                    self._set_status_results(was_successful=False, result_details="No task data returned from update")
                     logger.error(f"{self.name}: No task data returned from update")
                     return
 

@@ -250,14 +250,17 @@ class FlowCreateTask(BaseShotGridNode):
             task_status = self.get_parameter_value("task_status")
 
             if not project_id:
+                self._set_status_results(was_successful=False, result_details="project_id is required")
                 logger.error(f"{self.name}: project_id is required")
                 return
 
             if not entity_id:
+                self._set_status_results(was_successful=False, result_details="entity_id is required")
                 logger.error(f"{self.name}: entity_id is required")
                 return
 
             if not task_content:
+                self._set_status_results(was_successful=False, result_details="task_content is required")
                 logger.error(f"{self.name}: task_content is required")
                 return
 
@@ -266,6 +269,9 @@ class FlowCreateTask(BaseShotGridNode):
                 project_id = int(project_id)
                 entity_id = int(entity_id)
             except (ValueError, TypeError):
+                self._set_status_results(
+                    was_successful=False, result_details="project_id and entity_id must be valid integers"
+                )
                 logger.error(f"{self.name}: project_id and entity_id must be valid integers")
                 return
 
@@ -361,6 +367,7 @@ class FlowCreateTask(BaseShotGridNode):
 
                 self._set_status_results(was_successful=True, result_details=f"Successfully created task {task_id}")
             else:
+                self._set_status_results(was_successful=False, result_details="Failed to create task")
                 logger.error(f"{self.name}: Failed to create task")
 
         except Exception as e:

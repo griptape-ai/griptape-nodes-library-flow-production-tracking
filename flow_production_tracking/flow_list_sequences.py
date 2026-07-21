@@ -364,13 +364,14 @@ class FlowListSequences(BaseShotGridNode):
         return sequence_list, choices_names
 
     def process(self) -> None:
-        self._clear_execution_status()
         """Process the node - automatically load sequences when run."""
+        self._clear_execution_status()
         try:
             current_selection = self.get_parameter_value("selected_sequence")
 
             project_id = self.get_parameter_value("project_id")
             if not project_id:
+                self._set_status_results(was_successful=False, result_details="project_id is required")
                 logger.warning(f"{self.name}: project_id is required")
                 self._update_option_choices("selected_sequence", ["No project selected"], "No project selected")
                 return
@@ -379,6 +380,9 @@ class FlowListSequences(BaseShotGridNode):
             sequences = self._fetch_sequences_from_api()
 
             if not sequences:
+                self._set_status_results(
+                    was_successful=True, result_details=f"No sequences found for project {project_id}"
+                )
                 logger.warning(f"{self.name}: No sequences found for project {project_id}")
                 self._update_option_choices("selected_sequence", ["No sequences available"], "No sequences available")
                 return

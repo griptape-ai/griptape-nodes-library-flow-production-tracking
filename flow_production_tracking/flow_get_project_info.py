@@ -167,11 +167,12 @@ class FlowGetProjectInfo(BaseShotGridNode):
                 del self.parameter_output_values[param_name]
 
     def process(self) -> None:
-        self._clear_execution_status()
         """Get project information from ShotGrid."""
+        self._clear_execution_status()
         project_id = self.get_parameter_value("project_id")
 
         if not project_id:
+            self._set_status_results(was_successful=False, result_details="Project ID is required")
             logger.error(f"{self.name}: Project ID is required")
             return
 
@@ -193,6 +194,7 @@ class FlowGetProjectInfo(BaseShotGridNode):
                 project_data = data.get("data", {})
 
                 if not project_data:
+                    self._set_status_results(was_successful=False, result_details="No project data returned")
                     logger.error(f"{self.name}: No project data returned")
                     return
 

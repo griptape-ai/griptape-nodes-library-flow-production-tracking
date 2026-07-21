@@ -428,8 +428,8 @@ class FlowListAssets(BaseShotGridNode):
         return asset_list, choices_names
 
     def process(self) -> None:
-        self._clear_execution_status()
         """Process the node - automatically load assets when run."""
+        self._clear_execution_status()
         try:
             # Get current selection to preserve it
             current_selection = self.get_parameter_value("selected_asset")
@@ -437,6 +437,7 @@ class FlowListAssets(BaseShotGridNode):
             # Get input parameters
             project_id = self.get_parameter_value("project_id")
             if not project_id:
+                self._set_status_results(was_successful=False, result_details="project_id is required")
                 logger.warning(f"{self.name}: project_id is required")
                 self._update_option_choices("selected_asset", ["No project selected"], "No project selected")
                 return
@@ -446,6 +447,9 @@ class FlowListAssets(BaseShotGridNode):
             assets = self._fetch_assets_from_api()
 
             if not assets:
+                self._set_status_results(
+                    was_successful=True, result_details=f"No assets found for project {project_id}"
+                )
                 logger.warning(f"{self.name}: No assets found for project {project_id}")
                 self._update_option_choices("selected_asset", ["No assets available"], "No assets available")
                 return

@@ -113,8 +113,8 @@ class FlowCreateShot(BaseShotGridNode):
             logger.warning(f"{self.name}: Failed to update shot_url: {e}")
 
     def process(self) -> None:
-        self._clear_execution_status()
         """Create a new shot in ShotGrid."""
+        self._clear_execution_status()
         try:
             project_id = self.get_parameter_value("project_id")
             sequence_id = self.get_parameter_value("sequence_id")
@@ -123,10 +123,12 @@ class FlowCreateShot(BaseShotGridNode):
             thumbnail_image = self.get_parameter_value("thumbnail_image")
 
             if not project_id:
+                self._set_status_results(was_successful=False, result_details="project_id is required")
                 logger.error(f"{self.name}: project_id is required")
                 return
 
             if not shot_code:
+                self._set_status_results(was_successful=False, result_details="shot_code is required")
                 logger.error(f"{self.name}: shot_code is required")
                 return
 
@@ -135,6 +137,10 @@ class FlowCreateShot(BaseShotGridNode):
                 if sequence_id:
                     sequence_id = int(sequence_id)
             except (ValueError, TypeError) as e:
+                self._set_status_results(
+                    was_successful=False,
+                    result_details=f"project_id and sequence_id (if provided) must be valid integers: {e}",
+                )
                 logger.error(f"{self.name}: project_id and sequence_id (if provided) must be valid integers: {e}")
                 return
 
@@ -178,6 +184,7 @@ class FlowCreateShot(BaseShotGridNode):
                 shot_id = created_shot.get("id")
 
                 if not shot_id:
+                    self._set_status_results(was_successful=False, result_details="No shot ID returned from creation")
                     logger.error(f"{self.name}: No shot ID returned from creation")
                     return
 

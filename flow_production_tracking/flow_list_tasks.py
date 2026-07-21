@@ -555,8 +555,8 @@ class FlowListTasks(BaseShotGridNode):
             return []
 
     def process(self) -> None:
-        self._clear_execution_status()
         """Process the node - automatically load tasks when run."""
+        self._clear_execution_status()
         try:
             # Get current selection to preserve it
             current_selection = self.get_parameter_value("selected_task")
@@ -566,11 +566,13 @@ class FlowListTasks(BaseShotGridNode):
             entity_type = self.get_parameter_value("entity_type")
 
             if not entity_id:
+                self._set_status_results(was_successful=False, result_details="entity_id is required")
                 logger.warning(f"{self.name}: entity_id is required")
                 self._update_option_choices("selected_task", ["No entity selected"], "No entity selected")
                 return
 
             if not entity_type:
+                self._set_status_results(was_successful=False, result_details="entity_type is required")
                 logger.warning(f"{self.name}: entity_type is required")
                 self._update_option_choices("selected_task", ["No entity type selected"], "No entity type selected")
                 return
@@ -579,6 +581,7 @@ class FlowListTasks(BaseShotGridNode):
             try:
                 entity_id = int(entity_id)
             except (ValueError, TypeError):
+                self._set_status_results(was_successful=False, result_details="entity_id must be a valid integer")
                 logger.error(f"{self.name}: entity_id must be a valid integer")
                 self._update_option_choices("selected_task", ["Invalid entity ID"], "Invalid entity ID")
                 return
@@ -590,6 +593,9 @@ class FlowListTasks(BaseShotGridNode):
             )
 
             if not tasks:
+                self._set_status_results(
+                    was_successful=True, result_details=f"No tasks found for {entity_type} {entity_id}"
+                )
                 logger.warning(f"{self.name}: No tasks found for {entity_type} {entity_id}")
                 self._update_option_choices("selected_task", ["No tasks available"], "No tasks available")
                 return

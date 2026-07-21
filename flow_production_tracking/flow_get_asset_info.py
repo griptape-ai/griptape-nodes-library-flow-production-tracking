@@ -177,11 +177,12 @@ class FlowGetAssetInfo(BaseShotGridNode):
                 del self.parameter_output_values[param_name]
 
     def process(self) -> None:
-        self._clear_execution_status()
         """Get asset information from ShotGrid."""
+        self._clear_execution_status()
         asset_id = self.get_parameter_value("asset_id")
 
         if not asset_id:
+            self._set_status_results(was_successful=False, result_details="Asset ID is required")
             logger.error(f"{self.name}: Asset ID is required")
             return
 
@@ -203,6 +204,7 @@ class FlowGetAssetInfo(BaseShotGridNode):
                 asset_data = data.get("data", {})
 
                 if not asset_data:
+                    self._set_status_results(was_successful=False, result_details="No asset data returned")
                     logger.error(f"{self.name}: No asset data returned")
                     return
 

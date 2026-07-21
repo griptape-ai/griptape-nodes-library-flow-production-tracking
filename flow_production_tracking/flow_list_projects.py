@@ -472,8 +472,8 @@ class FlowListProjects(BaseShotGridNode):
         return project_list, choices_names
 
     def process(self) -> None:
-        self._clear_execution_status()
         """Process the node - automatically load projects when run."""
+        self._clear_execution_status()
         try:
             # Get current selection to preserve it
             current_selection = self.get_parameter_value("project")
@@ -483,6 +483,7 @@ class FlowListProjects(BaseShotGridNode):
             projects = self._fetch_projects_from_api()
 
             if not projects:
+                self._set_status_results(was_successful=True, result_details="No projects found")
                 logger.warning(f"{self.name}: No projects found")
                 self._update_option_choices("project", ["No projects available"], "No projects available")
                 return

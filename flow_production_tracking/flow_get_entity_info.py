@@ -344,8 +344,8 @@ class FlowGetEntityInfo(BaseShotGridNode):
         self._sync_dynamic_parameters(attributes)
 
     def process(self) -> None:
-        self._clear_execution_status()
         """Get entity information from ShotGrid."""
+        self._clear_execution_status()
         try:
             # Get and validate input parameters
             entity_type = self.get_parameter_value("entity_type")
@@ -353,6 +353,7 @@ class FlowGetEntityInfo(BaseShotGridNode):
             fields = self.get_parameter_value("fields")
 
             if not entity_id:
+                self._set_status_results(was_successful=False, result_details="Entity ID is required")
                 logger.error(f"{self.name}: Entity ID is required")
                 return
 
@@ -361,6 +362,10 @@ class FlowGetEntityInfo(BaseShotGridNode):
                 logger.info(f"{self.name}: Entity type is 'Unknown', attempting auto-detection...")
                 entity_type = self._detect_entity_type(entity_id)
                 if not entity_type:
+                    self._set_status_results(
+                        was_successful=False,
+                        result_details=f"Could not auto-detect entity type for ID {entity_id}",
+                    )
                     logger.error(f"{self.name}: Could not auto-detect entity type for ID {entity_id}")
                     return
 
@@ -427,6 +432,7 @@ class FlowGetEntityInfo(BaseShotGridNode):
                 entity_data = data.get("data", {})
 
                 if not entity_data:
+                    self._set_status_results(was_successful=False, result_details="No entity data returned")
                     logger.error(f"{self.name}: No entity data returned")
                     return
 

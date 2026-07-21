@@ -105,8 +105,8 @@ class FlowCreateEpisode(BaseShotGridNode):
             logger.warning(f"{self.name}: Failed to update episode_url: {e}")
 
     def process(self) -> None:
-        self._clear_execution_status()
         """Create a new episode in ShotGrid."""
+        self._clear_execution_status()
         try:
             # Get input parameters
             project_id = self.get_parameter_value("project_id")
@@ -115,16 +115,19 @@ class FlowCreateEpisode(BaseShotGridNode):
             thumbnail_image = self.get_parameter_value("thumbnail_image")
 
             if not project_id:
+                self._set_status_results(was_successful=False, result_details="project_id is required")
                 logger.error(f"{self.name}: project_id is required")
                 return
 
             if not episode_code:
+                self._set_status_results(was_successful=False, result_details="episode_code is required")
                 logger.error(f"{self.name}: episode_code is required")
                 return
 
             try:
                 project_id = int(project_id)
             except (ValueError, TypeError):
+                self._set_status_results(was_successful=False, result_details="project_id must be a valid integer")
                 logger.error(f"{self.name}: project_id must be a valid integer")
                 return
 
@@ -166,6 +169,7 @@ class FlowCreateEpisode(BaseShotGridNode):
                 episode_id = created_episode.get("id")
 
                 if not episode_id:
+                    self._set_status_results(was_successful=False, result_details="No episode ID returned from creation")
                     logger.error(f"{self.name}: No episode ID returned from creation")
                     return
 

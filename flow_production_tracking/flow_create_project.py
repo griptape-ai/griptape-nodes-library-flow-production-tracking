@@ -286,6 +286,7 @@ class FlowCreateProject(BaseShotGridNode):
             template_id = self.get_parameter_value("template_id")
 
             if not project_name:
+                self._set_status_results(was_successful=False, result_details="project_name is required")
                 logger.error(f"{self.name}: project_name is required")
                 return
 

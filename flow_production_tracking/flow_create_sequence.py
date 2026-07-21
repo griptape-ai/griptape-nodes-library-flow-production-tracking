@@ -113,8 +113,8 @@ class FlowCreateSequence(BaseShotGridNode):
             logger.warning(f"{self.name}: Failed to update sequence_url: {e}")
 
     def process(self) -> None:
-        self._clear_execution_status()
         """Create a new sequence in ShotGrid."""
+        self._clear_execution_status()
         try:
             project_id = self.get_parameter_value("project_id")
             episode_id = self.get_parameter_value("episode_id")
@@ -123,10 +123,12 @@ class FlowCreateSequence(BaseShotGridNode):
             thumbnail_image = self.get_parameter_value("thumbnail_image")
 
             if not project_id:
+                self._set_status_results(was_successful=False, result_details="project_id is required")
                 logger.error(f"{self.name}: project_id is required")
                 return
 
             if not sequence_code:
+                self._set_status_results(was_successful=False, result_details="sequence_code is required")
                 logger.error(f"{self.name}: sequence_code is required")
                 return
 
@@ -135,6 +137,10 @@ class FlowCreateSequence(BaseShotGridNode):
                 if episode_id:
                     episode_id = int(episode_id)
             except (ValueError, TypeError) as e:
+                self._set_status_results(
+                    was_successful=False,
+                    result_details=f"project_id and episode_id (if provided) must be valid integers: {e}",
+                )
                 logger.error(f"{self.name}: project_id and episode_id (if provided) must be valid integers: {e}")
                 return
 
@@ -176,6 +182,9 @@ class FlowCreateSequence(BaseShotGridNode):
                 sequence_id = created_sequence.get("id")
 
                 if not sequence_id:
+                    self._set_status_results(
+                        was_successful=False, result_details="No sequence ID returned from creation"
+                    )
                     logger.error(f"{self.name}: No sequence ID returned from creation")
                     return
 

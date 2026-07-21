@@ -1,6 +1,5 @@
 import os
 
-import httpx
 from base_shotgrid_node import BaseShotGridNode
 from griptape_nodes.exe_types.core_types import ParameterMode
 from griptape_nodes.exe_types.param_types.parameter_string import ParameterString
@@ -106,11 +105,12 @@ class FlowGetFilePath(BaseShotGridNode):
         return local_path
 
     def process(self) -> None:
-        self._clear_execution_status()
         """Resolve file path from URL or local path."""
+        self._clear_execution_status()
         file_input = self.get_parameter_value("file_input")
 
         if not file_input:
+            self._set_status_results(was_successful=False, result_details="No file input provided")
             logger.warning(f"{self.name}: No file input provided")
             return
 
