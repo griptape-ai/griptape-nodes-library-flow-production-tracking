@@ -112,11 +112,6 @@ class FlowCreateShot(BaseShotGridNode):
         except Exception as e:
             logger.warning(f"{self.name}: Failed to update shot_url: {e}")
 
-
-
-
-
-
     def process(self) -> None:
         self._clear_execution_status()
         """Create a new shot in ShotGrid."""

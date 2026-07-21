@@ -429,7 +429,9 @@ class FlowListEpisodes(BaseShotGridNode):
             # Update the selected episode data
             self._update_selected_episode_data(episodes[selected_index] if selected_index < len(episodes) else {})
 
-            self._set_status_results(was_successful=True, result_details=f"Successfully loaded {len(episode_list)} episodes")
+            self._set_status_results(
+                was_successful=True, result_details=f"Successfully loaded {len(episode_list)} episodes"
+            )
 
         except Exception as e:
             self._set_status_results(was_successful=False, result_details=str(e))

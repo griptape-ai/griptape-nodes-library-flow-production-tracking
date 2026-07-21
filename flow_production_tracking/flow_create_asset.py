@@ -200,11 +200,6 @@ class FlowCreateAsset(BaseShotGridNode):
 
         return super().after_value_set(parameter, value)
 
-
-
-
-
-
     def _populate_task_template_choices(self) -> None:
         """Populate the task_template_id parameter with available task templates for Asset entity type"""
         logger.info(f"{self.name}: _populate_task_template_choices called")
@@ -621,7 +616,9 @@ class FlowCreateAsset(BaseShotGridNode):
                             logger.info(
                                 f"{self.name}: Attempting thumbnail upload (attempt {attempt + 1}/{max_retries})"
                             )
-                            upload_id = self._update_entity_thumbnail("assets", asset_id, thumbnail_wrapper, access_token, base_url)
+                            upload_id = self._update_entity_thumbnail(
+                                "assets", asset_id, thumbnail_wrapper, access_token, base_url
+                            )
                             logger.info(f"{self.name}: Thumbnail uploaded successfully with upload_id: {upload_id}")
                             break  # Success, exit retry loop
                         except Exception as e:
@@ -645,7 +642,9 @@ class FlowCreateAsset(BaseShotGridNode):
             try:
                 asset_url = f"{base_url}api/v1/entity/assets/{asset_id}"
                 with httpx.Client() as client:
-                    resp = client.get(asset_url, headers={"Authorization": f"Bearer {access_token}", "Accept": "application/json"})
+                    resp = client.get(
+                        asset_url, headers={"Authorization": f"Bearer {access_token}", "Accept": "application/json"}
+                    )
                     resp.raise_for_status()
                     final_asset_data = resp.json().get("data", {})
                     logger.info(f"{self.name}: Retrieved final asset data")

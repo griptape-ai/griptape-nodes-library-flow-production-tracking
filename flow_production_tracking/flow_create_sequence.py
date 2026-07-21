@@ -112,11 +112,6 @@ class FlowCreateSequence(BaseShotGridNode):
         except Exception as e:
             logger.warning(f"{self.name}: Failed to update sequence_url: {e}")
 
-
-
-
-
-
     def process(self) -> None:
         self._clear_execution_status()
         """Create a new sequence in ShotGrid."""
@@ -220,7 +215,9 @@ class FlowCreateSequence(BaseShotGridNode):
 
                 self._update_sequence_url(sequence_id)
 
-                self._set_status_results(was_successful=True, result_details=f"Successfully created sequence {sequence_id}")
+                self._set_status_results(
+                    was_successful=True, result_details=f"Successfully created sequence {sequence_id}"
+                )
 
         except Exception as e:
             self._set_status_results(was_successful=False, result_details=str(e))

@@ -79,10 +79,6 @@ class FlowUpdateProject(BaseShotGridNode):
 
         self._create_status_parameters()
 
-
-
-
-
     def _update_project_url(self, project_id: int) -> None:
         """Update the project_url output parameter with the ShotGrid URL."""
         try:
@@ -196,7 +192,9 @@ class FlowUpdateProject(BaseShotGridNode):
             try:
                 project_url = f"{base_url}api/v1/entity/projects/{project_id}"
                 with httpx.Client() as client:
-                    resp = client.get(project_url, headers={"Authorization": f"Bearer {access_token}", "Accept": "application/json"})
+                    resp = client.get(
+                        project_url, headers={"Authorization": f"Bearer {access_token}", "Accept": "application/json"}
+                    )
                     resp.raise_for_status()
                     final_project_data = resp.json().get("data", {})
                     logger.info(f"{self.name}: Retrieved final project data")

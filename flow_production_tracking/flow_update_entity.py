@@ -457,7 +457,9 @@ class FlowUpdateEntity(BaseShotGridNode):
                 # Reload entity fields to show the updated values
                 self._load_entity_fields(entity_id, entity_type)
 
-                self._set_status_results(was_successful=True, result_details=f"Successfully updated {entity_type} {entity_id}")
+                self._set_status_results(
+                    was_successful=True, result_details=f"Successfully updated {entity_type} {entity_id}"
+                )
 
         except httpx.HTTPStatusError as e:
             logger.error(f"{self.name}: HTTP error updating entity: {e.response.status_code} - {e.response.text}")

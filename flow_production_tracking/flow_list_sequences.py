@@ -413,7 +413,9 @@ class FlowListSequences(BaseShotGridNode):
 
             self._update_selected_sequence_data(sequences[selected_index] if selected_index < len(sequences) else {})
 
-            self._set_status_results(was_successful=True, result_details=f"Successfully loaded {len(sequence_list)} sequences")
+            self._set_status_results(
+                was_successful=True, result_details=f"Successfully loaded {len(sequence_list)} sequences"
+            )
 
         except Exception as e:
             self._set_status_results(was_successful=False, result_details=str(e))

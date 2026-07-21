@@ -140,7 +140,9 @@ class FlowGetFilePath(BaseShotGridNode):
             self.publish_update_to_parameter("filename", filename)
             self.publish_update_to_parameter("file_size", str(file_size))
 
-            self._set_status_results(was_successful=True, result_details=f"Resolved to {local_path} ({file_size} bytes)")
+            self._set_status_results(
+                was_successful=True, result_details=f"Resolved to {local_path} ({file_size} bytes)"
+            )
 
         except Exception as e:
             self._set_status_results(was_successful=False, result_details=str(e))

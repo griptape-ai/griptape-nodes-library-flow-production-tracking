@@ -104,11 +104,6 @@ class FlowCreateEpisode(BaseShotGridNode):
         except Exception as e:
             logger.warning(f"{self.name}: Failed to update episode_url: {e}")
 
-
-
-
-
-
     def process(self) -> None:
         self._clear_execution_status()
         """Create a new episode in ShotGrid."""
@@ -214,7 +209,9 @@ class FlowCreateEpisode(BaseShotGridNode):
                 # Update the episode URL
                 self._update_episode_url(episode_id)
 
-                self._set_status_results(was_successful=True, result_details=f"Successfully created episode {episode_id}")
+                self._set_status_results(
+                    was_successful=True, result_details=f"Successfully created episode {episode_id}"
+                )
 
         except Exception as e:
             self._set_status_results(was_successful=False, result_details=str(e))

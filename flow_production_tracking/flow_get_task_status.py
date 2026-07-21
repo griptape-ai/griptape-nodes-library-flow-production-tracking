@@ -202,7 +202,10 @@ class FlowGetTaskStatus(BaseShotGridNode):
             # Extract and populate all task information
             self._populate_task_information(task_data)
 
-            self._set_status_results(was_successful=True, result_details=f"Successfully retrieved comprehensive task information for task {task_id}")
+            self._set_status_results(
+                was_successful=True,
+                result_details=f"Successfully retrieved comprehensive task information for task {task_id}",
+            )
 
         except Exception as e:
             self._set_status_results(was_successful=False, result_details=str(e))

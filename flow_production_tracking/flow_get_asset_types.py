@@ -122,7 +122,9 @@ class FlowGetAssetTypes(BaseShotGridNode):
 
                 # Output the asset types
                 self.parameter_output_values["asset_types"] = asset_types
-                self._set_status_results(was_successful=True, result_details=f"Found {len(asset_types)} asset types for project {project_id}")
+                self._set_status_results(
+                    was_successful=True, result_details=f"Found {len(asset_types)} asset types for project {project_id}"
+                )
 
         except Exception as e:
             self._set_status_results(was_successful=False, result_details=str(e))

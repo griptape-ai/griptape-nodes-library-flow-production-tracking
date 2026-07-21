@@ -82,13 +82,19 @@ class BaseShotGridNode(SuccessFailureNode):
             logger.error(f"{self.name}: Failed to download image from URL: {e}")
             raise
 
-    def _get_upload_url(self, entity_type_plural: str, entity_id: int, filename: str, access_token: str, base_url: str) -> dict:
+    def _get_upload_url(
+        self, entity_type_plural: str, entity_id: int, filename: str, access_token: str, base_url: str
+    ) -> dict:
         """Get upload URL for an entity thumbnail."""
         try:
             encoded_filename = urllib.parse.quote(filename)
-            upload_url = f"{base_url}api/v1/entity/{entity_type_plural}/{entity_id}/image/_upload?filename={encoded_filename}"
+            upload_url = (
+                f"{base_url}api/v1/entity/{entity_type_plural}/{entity_id}/image/_upload?filename={encoded_filename}"
+            )
             headers = {"Authorization": f"Bearer {access_token}", "Accept": "application/json"}
-            logger.info(f"{self.name}: Requesting upload URL for {entity_type_plural} {entity_id} with filename '{filename}'")
+            logger.info(
+                f"{self.name}: Requesting upload URL for {entity_type_plural} {entity_id} with filename '{filename}'"
+            )
             with httpx.Client() as client:
                 response = client.get(upload_url, headers=headers)
                 response.raise_for_status()
@@ -118,7 +124,9 @@ class BaseShotGridNode(SuccessFailureNode):
             logger.error(f"{self.name}: Failed to upload file: {e}")
             raise
 
-    def _complete_upload(self, entity_type_plural: str, entity_id: int, upload_info: dict, access_token: str, base_url: str) -> dict:
+    def _complete_upload(
+        self, entity_type_plural: str, entity_id: int, upload_info: dict, access_token: str, base_url: str
+    ) -> dict:
         """Complete the upload process."""
         try:
             complete_url = f"{base_url}api/v1/entity/{entity_type_plural}/{entity_id}/image/_upload"
@@ -149,7 +157,9 @@ class BaseShotGridNode(SuccessFailureNode):
             logger.error(f"{self.name}: Failed to complete upload: {e}")
             raise
 
-    def _update_entity_thumbnail(self, entity_type_plural: str, entity_id: int, thumbnail_image, access_token: str, base_url: str) -> str:
+    def _update_entity_thumbnail(
+        self, entity_type_plural: str, entity_id: int, thumbnail_image, access_token: str, base_url: str
+    ) -> str:
         """Upload a thumbnail image for any ShotGrid entity type."""
         try:
             logger.info(f"{self.name}: Downloading image from URL")
@@ -191,7 +201,9 @@ class BaseShotGridNode(SuccessFailureNode):
 
             self._upload_file_to_url(upload_url, image_bytes, mime_type)
 
-            completion_response = self._complete_upload(entity_type_plural, entity_id, upload_info, access_token, base_url)
+            completion_response = self._complete_upload(
+                entity_type_plural, entity_id, upload_info, access_token, base_url
+            )
             upload_id = completion_response.get("data", {}).get("id")
 
             if not upload_id:

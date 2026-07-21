@@ -212,7 +212,9 @@ class FlowGetProjectInfo(BaseShotGridNode):
                 # Update project URL
                 self._update_project_url()
 
-                self._set_status_results(was_successful=True, result_details=f"Successfully retrieved project {project_id}")
+                self._set_status_results(
+                    was_successful=True, result_details=f"Successfully retrieved project {project_id}"
+                )
 
         except Exception as e:
             self._set_status_results(was_successful=False, result_details=str(e))

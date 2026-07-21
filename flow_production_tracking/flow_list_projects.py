@@ -521,7 +521,9 @@ class FlowListProjects(BaseShotGridNode):
             # Update the selected project data
             self._update_project_data(selected_index)
 
-            self._set_status_results(was_successful=True, result_details=f"Successfully loaded {len(project_list)} projects")
+            self._set_status_results(
+                was_successful=True, result_details=f"Successfully loaded {len(project_list)} projects"
+            )
 
         except Exception as e:
             self._set_status_results(was_successful=False, result_details=str(e))

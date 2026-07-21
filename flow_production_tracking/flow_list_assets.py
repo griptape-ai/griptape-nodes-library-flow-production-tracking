@@ -486,7 +486,9 @@ class FlowListAssets(BaseShotGridNode):
             # Update the selected asset data
             self._update_selected_asset_data(assets[selected_index] if selected_index < len(assets) else {})
 
-            self._set_status_results(was_successful=True, result_details=f"Successfully loaded {len(asset_list)} assets")
+            self._set_status_results(
+                was_successful=True, result_details=f"Successfully loaded {len(asset_list)} assets"
+            )
 
         except Exception as e:
             self._set_status_results(was_successful=False, result_details=str(e))

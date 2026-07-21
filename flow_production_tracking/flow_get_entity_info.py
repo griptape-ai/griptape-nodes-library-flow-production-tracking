@@ -439,7 +439,9 @@ class FlowGetEntityInfo(BaseShotGridNode):
                 # Update entity URL
                 self._update_entity_url()
 
-                self._set_status_results(was_successful=True, result_details=f"Successfully retrieved {entity_type} {entity_id}")
+                self._set_status_results(
+                    was_successful=True, result_details=f"Successfully retrieved {entity_type} {entity_id}"
+                )
 
         except Exception as e:
             self._set_status_results(was_successful=False, result_details=str(e))

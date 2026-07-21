@@ -88,10 +88,6 @@ class FlowUpdateAsset(BaseShotGridNode):
 
         self._create_status_parameters()
 
-
-
-
-
     def _update_asset_url(self, asset_id: int) -> None:
         """Update the asset_url output parameter with the ShotGrid URL."""
         try:

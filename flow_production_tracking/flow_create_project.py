@@ -1,4 +1,3 @@
-
 import httpx
 from base_shotgrid_node import BaseShotGridNode
 from flow_utils import create_shotgrid_api
@@ -110,10 +109,6 @@ class FlowCreateProject(BaseShotGridNode):
         self._populate_template_choices()
 
         self._create_status_parameters()
-
-
-
-
 
     def _update_project_message(self, project_id: int, project_name: str) -> None:
         """Update the ParameterMessage with a link to the created project."""
@@ -517,7 +512,9 @@ class FlowCreateProject(BaseShotGridNode):
             try:
                 project_url = f"{base_url}api/v1/entity/projects/{project_id}"
                 with httpx.Client() as client:
-                    resp = client.get(project_url, headers={"Authorization": f"Bearer {access_token}", "Accept": "application/json"})
+                    resp = client.get(
+                        project_url, headers={"Authorization": f"Bearer {access_token}", "Accept": "application/json"}
+                    )
                     resp.raise_for_status()
                     final_project_data = resp.json().get("data", {})
                     logger.info(f"{self.name}: Retrieved final project data")

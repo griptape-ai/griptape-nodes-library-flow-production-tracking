@@ -573,7 +573,10 @@ class FlowUploadFile(BaseShotGridNode):
                     self.parameter_output_values[param_name] = value
                     self.publish_update_to_parameter(param_name, value)
 
-                self._set_status_results(was_successful=True, result_details=f"Successfully uploaded {self._final_filename} to Version {version_id}")
+                self._set_status_results(
+                    was_successful=True,
+                    result_details=f"Successfully uploaded {self._final_filename} to Version {version_id}",
+                )
 
             yield _finalize
 
