@@ -491,8 +491,8 @@ class FlowListAssets(BaseShotGridNode):
             self._update_option_choices("selected_asset", choices_names, selected_value)
             logger.info(f"{self.name}: Dropdown updated, selected_value: {selected_value}")
 
-            # Update the selected asset data
-            self._update_selected_asset_data(assets[selected_index] if selected_index < len(assets) else {})
+            # Update the selected asset data (use processed asset_list, not raw API assets)
+            self._update_selected_asset_data(asset_list[selected_index] if selected_index < len(asset_list) else {})
 
             self._set_status_results(
                 was_successful=True, result_details=f"Successfully loaded {len(asset_list)} assets"
