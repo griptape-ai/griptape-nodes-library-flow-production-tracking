@@ -173,9 +173,9 @@ class AutodeskFlowConfiguration(ControlNode):
             status_message = "## ✅ Autodesk Flow configuration is valid!\n\n"
             status_message += "| Field | Value |\n"
             status_message += "|-------|-------|\n"
-            status_message += f"| URL | {autodesk_flow_url.replace('|', '\\|')} |\n"
+            status_message += f"| URL | `{autodesk_flow_url}` |\n"
             status_message += f"| API Key | `{api_key[:8]}...{api_key[-4:]}` |\n"
-            status_message += f"| Script | {script_name.replace('|', '\\|')} |\n"
+            status_message += f"| Script | `{script_name}` |\n"
             status_message += "| Auth | API key |\n"
             status_message += "\n🎉 You can now use other Autodesk Flow nodes!"
 
