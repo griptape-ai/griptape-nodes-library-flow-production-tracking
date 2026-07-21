@@ -8,6 +8,8 @@ from griptape_nodes.exe_types.core_types import (
     ParameterMode,
 )
 from griptape_nodes.exe_types.node_types import ControlNode
+from griptape_nodes.exe_types.param_types.parameter_button import ParameterButton
+from griptape_nodes.exe_types.param_types.parameter_string import ParameterString
 from griptape_nodes.retained_mode.griptape_nodes import GriptapeNodes
 from griptape_nodes.traits.button import Button, ButtonDetailsMessagePayload, OnClickMessageResultPayload
 
@@ -20,15 +22,12 @@ class AutodeskFlowConfiguration(ControlNode):
 
         # Step 1: ShotGrid URL
         with ParameterGroup(name="Step_1_Autodesk_Flow_URL") as url_group:
-            Parameter(
+            ParameterString(
                 name="autodesk_flow_url",
-                type="string",
                 default_value=GriptapeNodes.SecretsManager().get_secret("SHOTGRID_URL") or "",
-                tooltip="Your ShotGrid instance URL (e.g., https://your-company.shotgrid.autodesk.com/)",
-                ui_options={
-                    "display_name": "Autodesk Flow URL",
-                    "placeholder": "https://your-company.shotgrid.autodesk.com/",
-                },
+                tooltip="Your Autodesk Flow instance URL (e.g., https://your-company.shotgrid.autodesk.com/)",
+                display_name="Autodesk Flow URL",
+                placeholder_text="https://your-company.shotgrid.autodesk.com/",
             )
 
         self.add_node_element(url_group)
@@ -44,15 +43,12 @@ class AutodeskFlowConfiguration(ControlNode):
                 variant="none",
             )
 
-            Parameter(
+            ParameterString(
                 name="script_name",
-                type="string",
                 default_value=GriptapeNodes.SecretsManager().get_secret("SHOTGRID_SCRIPT_NAME") or "gtn",
                 tooltip="Name of the script (should match the script name in Autodesk Flow)",
-                ui_options={
-                    "display_name": "Script Name",
-                    "placeholder": "gtn",
-                },
+                display_name="Script Name",
+                placeholder_text="gtn",
             )
 
         self.add_node_element(script_group)
@@ -71,30 +67,24 @@ class AutodeskFlowConfiguration(ControlNode):
 
         with ParameterGroup(name="Step_4_Check_Configuration") as check_config_group:
             # Step 4: Check Configuration
-            ParameterMessage(
-                name="step4_message",
-                value="Click the button below to test your Autodesk Flow configuration and verify everything is working correctly.",
-                button_text="Check Configuration",
-                variant="none",
-                button_icon="check-circle",
-                traits={
-                    Button(
-                        label="Check Configuration",
-                        icon="check-circle",
-                        on_click=self._check_configuration,
-                        full_width=True,
-                    )
-                },
+            ParameterButton(
+                name="check_configuration",
+                label="Check Configuration",
+                variant="secondary",
+                icon="check-circle",
+                on_click=self._check_configuration,
             )
 
             # Check configuration button
-            Parameter(
+            ParameterString(
                 name="configuration_status",
-                type="str",
                 default_value="",
+                multiline=True,
+                is_full_width=True,
+                markdown=True,
+                placeholder_text="Configuration status will be displayed here after testing.",
                 tooltip="Test your Autodesk Flow configuration",
                 allowed_modes={ParameterMode.PROPERTY, ParameterMode.OUTPUT},
-                ui_options={"multiline": True, "is_full_width": True, "placeholder_text": "Configuration status..."},
             )
         self.add_node_element(check_config_group)
 
@@ -118,14 +108,14 @@ class AutodeskFlowConfiguration(ControlNode):
 
         # Validate required fields
         if not autodesk_flow_url or not api_key:
-            status_message = "❌ Configuration incomplete!\n\n"
+            status_message = "❌ **Configuration incomplete**\n\n"
+            status_message += "**Missing:**\n\n"
             if not autodesk_flow_url:
-                status_message += "• Autodesk Flow URL is required\n"
+                status_message += "- Autodesk Flow URL is required\n"
             if not api_key:
-                status_message += "• API Key is required (set via SHOTGRID_API_KEY environment variable)\n"
-
-            status_message += "\nTo complete configuration:\n"
-            status_message += "• Set SHOTGRID_API_KEY environment variable\n"
+                status_message += "- API Key is required (set via `SHOTGRID_API_KEY` in secrets)\n"
+            status_message += "\n**To complete configuration:**\n\n"
+            status_message += "- Set `SHOTGRID_API_KEY` in your secrets settings\n"
 
             self.set_parameter_value("configuration_status", status_message)
             response = OnClickMessageResultPayload(button_details=button_details)
@@ -180,11 +170,13 @@ class AutodeskFlowConfiguration(ControlNode):
             response.raise_for_status()
 
             # Configuration is valid
-            status_message = "✅ Autodesk Flow configuration is valid!\n\n"
-            status_message += f"📡 URL: {autodesk_flow_url}\n"
-            status_message += f"🔑 API Key: {api_key[:8]}...{api_key[-4:]}\n"
-            status_message += f"📝 Script: {script_name}\n"
-            status_message += "🔐 Using API key authentication\n"
+            status_message = "## ✅ Autodesk Flow configuration is valid!\n\n"
+            status_message += "| Field | Value |\n"
+            status_message += "|-------|-------|\n"
+            status_message += f"| URL | `{autodesk_flow_url}` |\n"
+            status_message += f"| API Key | `{api_key[:8]}...{api_key[-4:]}` |\n"
+            status_message += f"| Script | `{script_name}` |\n"
+            status_message += "| Auth | API key |\n"
             status_message += "\n🎉 You can now use other Autodesk Flow nodes!"
 
             self.set_parameter_value("configuration_status", status_message)
@@ -192,12 +184,13 @@ class AutodeskFlowConfiguration(ControlNode):
             return NodeMessageResult(success=True, details="Configuration test successful", response=response)
 
         except Exception as e:
-            status_message = f"❌ Configuration test failed: {e!s}\n\n"
-            status_message += "Please check:\n"
-            status_message += "• Autodesk Flow URL is correct\n"
-            status_message += "• API Key is valid\n"
-            status_message += "• Script name matches Autodesk Flow settings\n"
-            status_message += "• Network connection is working"
+            status_message = "❌ **Configuration test failed**\n\n"
+            status_message += f"```\n{e!s}\n```\n\n"
+            status_message += "**Please check:**\n\n"
+            status_message += "- Autodesk Flow URL is correct\n"
+            status_message += "- API Key is valid\n"
+            status_message += "- Script name matches Autodesk Flow settings\n"
+            status_message += "- Network connection is working"
 
             self.set_parameter_value("configuration_status", status_message)
             response = OnClickMessageResultPayload(button_details=button_details)
