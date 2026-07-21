@@ -24,7 +24,7 @@ class AutodeskFlowConfiguration(ControlNode):
         with ParameterGroup(name="Step_1_Autodesk_Flow_URL") as url_group:
             ParameterString(
                 name="autodesk_flow_url",
-                default_value=GriptapeNodes.SecretsManager().get_secret("AUTODESK_FLOW_URL") or "",
+                default_value=GriptapeNodes.SecretsManager().get_secret("SHOTGRID_URL") or "",
                 tooltip="Your Autodesk Flow instance URL (e.g., https://your-company.shotgrid.autodesk.com/)",
                 display_name="Autodesk Flow URL",
                 placeholder_text="https://your-company.shotgrid.autodesk.com/",
@@ -108,14 +108,14 @@ class AutodeskFlowConfiguration(ControlNode):
 
         # Validate required fields
         if not autodesk_flow_url or not api_key:
-            status_message = "❌ Configuration incomplete!\n\n"
+            status_message = "❌ **Configuration incomplete**\n\n"
+            status_message += "**Missing:**\n\n"
             if not autodesk_flow_url:
-                status_message += "• Autodesk Flow URL is required\n"
+                status_message += "- Autodesk Flow URL is required\n"
             if not api_key:
-                status_message += "• API Key is required (set via SHOTGRID_API_KEY environment variable)\n"
-
-            status_message += "\nTo complete configuration:\n"
-            status_message += "• Set SHOTGRID_API_KEY environment variable\n"
+                status_message += "- API Key is required (set via `SHOTGRID_API_KEY` in secrets)\n"
+            status_message += "\n**To complete configuration:**\n\n"
+            status_message += "- Set `SHOTGRID_API_KEY` in your secrets settings\n"
 
             self.set_parameter_value("configuration_status", status_message)
             response = OnClickMessageResultPayload(button_details=button_details)
@@ -173,9 +173,9 @@ class AutodeskFlowConfiguration(ControlNode):
             status_message = "## ✅ Autodesk Flow configuration is valid!\n\n"
             status_message += "| Field | Value |\n"
             status_message += "|-------|-------|\n"
-            status_message += f"| URL | {autodesk_flow_url} |\n"
+            status_message += f"| URL | {autodesk_flow_url.replace('|', '\\|')} |\n"
             status_message += f"| API Key | `{api_key[:8]}...{api_key[-4:]}` |\n"
-            status_message += f"| Script | {script_name} |\n"
+            status_message += f"| Script | {script_name.replace('|', '\\|')} |\n"
             status_message += "| Auth | API key |\n"
             status_message += "\n🎉 You can now use other Autodesk Flow nodes!"
 
