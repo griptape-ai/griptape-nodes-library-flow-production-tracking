@@ -4,7 +4,6 @@ import httpx
 from base_shotgrid_node import BaseShotGridNode
 from griptape_nodes.exe_types.core_types import Parameter, ParameterMode
 from griptape_nodes.exe_types.param_types.parameter_string import ParameterString
-from griptape_nodes.retained_mode.events.node_events import ListParametersOnNodeRequest
 from griptape_nodes.retained_mode.events.parameter_events import (
     AddParameterToNodeRequest,
     GetConnectionsForParameterRequest,
@@ -161,17 +160,6 @@ class FlowUpdateEntity(BaseShotGridNode):
         self.parameter_output_values["entity_url"] = entity_url
         self.publish_update_to_parameter("entity_url", entity_url)
 
-    def _get_current_parameter_names(self) -> set[str]:
-        """Get the actual parameter names that exist on this node."""
-        try:
-            result = GriptapeNodes.handle_request(ListParametersOnNodeRequest(node_name=self.name))
-            if hasattr(result, "parameter_names"):
-                return set(result.parameter_names)
-            return set()
-        except Exception as e:
-            logger.warning(f"{self.name}: Error getting parameter names: {e}")
-            return set()
-
     def _is_parameter_connected(self, param_name: str) -> bool:
         """Check if a parameter has any connections (incoming or outgoing)."""
         try:
@@ -268,19 +256,9 @@ class FlowUpdateEntity(BaseShotGridNode):
     def _sync_dynamic_parameters(self, attributes: dict) -> None:
         """Sync dynamic input parameters with entity attributes."""
         # Static parameters that should never be deleted
-        static_params = {
-            "entity_url",
-            "updated_entity",
-            "entity_type",
-            "entity_id",
-            "exec_out",
-            "exec_in",
-            "execution_environment",
-            "job_group",
+        current_dynamic_params = {
+            p.name for p in self.root_ui_element.find_elements_by_type(Parameter) if p.user_defined
         }
-
-        all_current_params = self._get_current_parameter_names()
-        current_dynamic_params = all_current_params - static_params
         desired_params = set(attributes.keys())
 
         logger.info(f"{self.name}: Current dynamic params: {current_dynamic_params}")
@@ -380,20 +358,10 @@ class FlowUpdateEntity(BaseShotGridNode):
             logger.warning(f"{self.name}: Unknown entity type '{entity_type}', proceeding anyway")
 
         # Collect update data from dynamic parameters (non-None values only)
-        static_params = {
-            "entity_url",
-            "updated_entity",
-            "entity_type",
-            "entity_id",
-            "exec_out",
-            "exec_in",
-            "execution_environment",
-            "job_group",
-        }
-
         update_data = {}
-        all_params = self._get_current_parameter_names()
-        dynamic_params = all_params - static_params
+        dynamic_params = {
+            p.name for p in self.root_ui_element.find_elements_by_type(Parameter) if p.user_defined
+        }
 
         for param_name in dynamic_params:
             param_value = self.get_parameter_value(param_name)
