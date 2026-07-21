@@ -405,9 +405,7 @@ class FlowListShots(BaseShotGridNode):
             shots = self._fetch_shots_from_api()
 
             if not shots:
-                self._set_status_results(
-                    was_successful=True, result_details=f"No shots found for project {project_id}"
-                )
+                self._set_status_results(was_successful=True, result_details=f"No shots found for project {project_id}")
                 logger.warning(f"{self.name}: No shots found for project {project_id}")
                 self._update_option_choices("selected_shot", ["No shots available"], "No shots available")
                 return

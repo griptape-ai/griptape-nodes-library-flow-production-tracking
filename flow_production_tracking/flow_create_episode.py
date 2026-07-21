@@ -173,7 +173,9 @@ class FlowCreateEpisode(BaseShotGridNode):
                 episode_id = created_episode.get("id")
 
                 if not episode_id:
-                    self._set_status_results(was_successful=False, result_details="No episode ID returned from creation")
+                    self._set_status_results(
+                        was_successful=False, result_details="No episode ID returned from creation"
+                    )
                     logger.error(f"{self.name}: No episode ID returned from creation")
                     return
 
