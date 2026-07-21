@@ -438,7 +438,7 @@ class FlowListShots(BaseShotGridNode):
             self._update_option_choices("selected_shot", choices_names, selected_value)
             logger.info(f"{self.name}: Dropdown updated, selected_value: {selected_value}")
 
-            self._update_selected_shot_data(shots[selected_index] if selected_index < len(shots) else {})
+            self._update_selected_shot_data(shot_list[selected_index] if selected_index < len(shot_list) else {})
 
             self._set_status_results(was_successful=True, result_details=f"Successfully loaded {len(shot_list)} shots")
 

@@ -419,7 +419,9 @@ class FlowListSequences(BaseShotGridNode):
             self._update_option_choices("selected_sequence", choices_names, selected_value)
             logger.info(f"{self.name}: Dropdown updated, selected_value: {selected_value}")
 
-            self._update_selected_sequence_data(sequences[selected_index] if selected_index < len(sequences) else {})
+            self._update_selected_sequence_data(
+                sequence_list[selected_index] if selected_index < len(sequence_list) else {}
+            )
 
             self._set_status_results(
                 was_successful=True, result_details=f"Successfully loaded {len(sequence_list)} sequences"

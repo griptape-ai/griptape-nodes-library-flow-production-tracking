@@ -435,7 +435,9 @@ class FlowListEpisodes(BaseShotGridNode):
             logger.info(f"{self.name}: Dropdown updated, selected_value: {selected_value}")
 
             # Update the selected episode data
-            self._update_selected_episode_data(episodes[selected_index] if selected_index < len(episodes) else {})
+            self._update_selected_episode_data(
+                episode_list[selected_index] if selected_index < len(episode_list) else {}
+            )
 
             self._set_status_results(
                 was_successful=True, result_details=f"Successfully loaded {len(episode_list)} episodes"
