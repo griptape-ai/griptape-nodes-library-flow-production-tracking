@@ -194,12 +194,14 @@ class FlowUpdateProject(BaseShotGridNode):
 
             # Get final project data
             try:
-                project_response = self._get_project_data(project_id, access_token, base_url)
-                final_project_data = project_response.get("data", {})
-                logger.info(f"{self.name}: Retrieved final project data")
+                project_url = f"{base_url}api/v1/entity/projects/{project_id}"
+                with httpx.Client() as client:
+                    resp = client.get(project_url, headers={"Authorization": f"Bearer {access_token}", "Accept": "application/json"})
+                    resp.raise_for_status()
+                    final_project_data = resp.json().get("data", {})
+                    logger.info(f"{self.name}: Retrieved final project data")
             except Exception as e:
                 logger.warning(f"{self.name}: Could not get final project data: {e}")
-                # Use the updated project data from the basic update if available
                 final_project_data = updated_project if has_basic_updates else {"id": project_id, "status": "updated"}
 
             # Output the results

@@ -369,49 +369,6 @@ class FlowCreateAsset(BaseShotGridNode):
         finally:
             self.populating_templates = False
 
-    def _try_direct_field_update(self, asset_id: int, thumbnail_url: str, access_token: str, base_url: str) -> str:
-        """Try updating the asset's image field directly"""
-        try:
-            update_url = f"{base_url}api/v1/entity/assets/{asset_id}"
-            headers = {
-                "Authorization": f"Bearer {access_token}",
-                "Content-Type": "application/json",
-                "Accept": "application/json",
-            }
-
-            update_data = {"image": thumbnail_url}
-
-            with httpx.Client() as client:
-                response = client.put(update_url, headers=headers, json=update_data)
-
-                if response.status_code == 200:
-                    logger.info(f"{self.name}: Successfully updated asset image field directly")
-                    return self._check_asset_image_field(asset_id, access_token, base_url)
-                logger.warning(f"{self.name}: Direct field update failed: {response.status_code}")
-                return "update_failed"
-
-        except Exception as e:
-            logger.warning(f"{self.name}: Direct field update exception: {e}")
-            return "update_exception"
-
-    def _check_asset_image_field(self, asset_id: int, access_token: str, base_url: str) -> str:
-        """Check if the asset's image field was updated and return the file ID"""
-        try:
-            logger.info(f"{self.name}: Checking asset image field for {asset_id}")
-            asset_response = self._get_asset_data(asset_id, access_token, base_url)
-            asset_data = asset_response.get("data", {})
-            image_url = asset_data.get("attributes", {}).get("image")
-
-            if image_url:
-                logger.info(f"{self.name}: Found updated image URL: {image_url}")
-                return image_url
-            logger.warning(f"{self.name}: No image URL found in asset data")
-            return "no_image"
-
-        except Exception as e:
-            logger.warning(f"{self.name}: Could not check asset image field: {e}")
-            return "check_failed"
-
     def _create_asset_from_template(
         self,
         template_id: int,
@@ -686,12 +643,14 @@ class FlowCreateAsset(BaseShotGridNode):
 
             # Get final asset data
             try:
-                asset_response = self._get_asset_data(asset_id, access_token, base_url)
-                final_asset_data = asset_response.get("data", {})
-                logger.info(f"{self.name}: Retrieved final asset data")
+                asset_url = f"{base_url}api/v1/entity/assets/{asset_id}"
+                with httpx.Client() as client:
+                    resp = client.get(asset_url, headers={"Authorization": f"Bearer {access_token}", "Accept": "application/json"})
+                    resp.raise_for_status()
+                    final_asset_data = resp.json().get("data", {})
+                    logger.info(f"{self.name}: Retrieved final asset data")
             except Exception as e:
                 logger.warning(f"{self.name}: Could not get final asset data: {e}")
-                # Use the created asset data if we can't get the final data
                 final_asset_data = created_asset
 
             # Output the results
