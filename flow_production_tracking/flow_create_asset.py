@@ -458,14 +458,17 @@ class FlowCreateAsset(BaseShotGridNode):
             logger.info(f"{self.name}: Creating asset with type: '{asset_type}'")
 
             if not project_id:
+                self._set_status_results(was_successful=False, result_details="project_id is required")
                 logger.error(f"{self.name}: project_id is required")
                 return
 
             if not asset_code:
+                self._set_status_results(was_successful=False, result_details="asset_code is required")
                 logger.error(f"{self.name}: asset_code is required")
                 return
 
             if not asset_type:
+                self._set_status_results(was_successful=False, result_details="asset_type is required")
                 logger.error(f"{self.name}: asset_type is required")
                 return
 

@@ -163,7 +163,15 @@ class BaseShotGridNode(SuccessFailureNode):
         """Upload a thumbnail image for any ShotGrid entity type."""
         try:
             logger.info(f"{self.name}: Downloading image from URL")
-            thumbnail_url = thumbnail_image.value
+            if hasattr(thumbnail_image, "value"):
+                thumbnail_url = thumbnail_image.value
+            elif isinstance(thumbnail_image, dict):
+                thumbnail_url = thumbnail_image.get("value") or thumbnail_image.get("url")
+            elif isinstance(thumbnail_image, str):
+                thumbnail_url = thumbnail_image
+            else:
+                raise ValueError(f"Unsupported thumbnail_image type: {type(thumbnail_image)}")
+
             image_bytes = self._download_image_from_url(thumbnail_url)
 
             if hasattr(thumbnail_image, "name") and thumbnail_image.name:

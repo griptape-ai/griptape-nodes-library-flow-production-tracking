@@ -451,10 +451,12 @@ class FlowUploadFile(BaseShotGridNode):
             description = self.get_parameter_value("description")
 
             if not entity_id:
+                self._set_status_results(was_successful=False, result_details="Entity ID is required")
                 logger.error(f"{self.name}: Entity ID is required")
                 return
 
             if not file_path:
+                self._set_status_results(was_successful=False, result_details="File path is required")
                 logger.error(f"{self.name}: File path is required")
                 return
 
