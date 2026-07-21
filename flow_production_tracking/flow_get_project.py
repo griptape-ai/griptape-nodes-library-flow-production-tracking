@@ -37,8 +37,10 @@ class FlowGetProject(BaseShotGridNode):
                 ui_options={"hide_property": True},
             )
         )
+        self._create_status_parameters()
 
     def process(self) -> None:
+        self._clear_execution_status()
         try:
             # Get input parameters
             project_id = self.get_parameter_value("project_id")
@@ -83,11 +85,9 @@ class FlowGetProject(BaseShotGridNode):
                 # Output the project data and thumbnail
                 self.parameter_output_values["project"] = project
                 self.parameter_output_values["project_thumbnail"] = thumbnail_url
-                logger.info(f"{self.name}: Retrieved project data: {project}")
-                if thumbnail_url:
-                    logger.info(f"{self.name}: Project thumbnail URL: {thumbnail_url}")
-                else:
-                    logger.info(f"{self.name}: No thumbnail found for project")
+                details = f"Retrieved project data (thumbnail: {thumbnail_url if thumbnail_url else 'none'})"
+                self._set_status_results(was_successful=True, result_details=details)
 
         except Exception as e:
-            logger.error(f"{self.name} encountered an error: {e!s}")
+            self._set_status_results(was_successful=False, result_details=str(e))
+            self._handle_failure_exception(e)

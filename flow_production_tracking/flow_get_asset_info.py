@@ -58,6 +58,7 @@ class FlowGetAssetInfo(BaseShotGridNode):
                 allowed_modes={ParameterMode.OUTPUT},
             )
         )
+        self._create_status_parameters()
 
     def after_value_set(self, parameter: Parameter, value: Any) -> None:
         if parameter.name == "asset_id" and value:
@@ -176,6 +177,7 @@ class FlowGetAssetInfo(BaseShotGridNode):
                 del self.parameter_output_values[param_name]
 
     def process(self) -> None:
+        self._clear_execution_status()
         """Get asset information from ShotGrid."""
         asset_id = self.get_parameter_value("asset_id")
 
@@ -235,9 +237,8 @@ class FlowGetAssetInfo(BaseShotGridNode):
                 # Update asset URL
                 self._update_asset_url()
 
-                logger.info(f"{self.name}: Successfully retrieved asset {asset_id}")
+                self._set_status_results(was_successful=True, result_details=f"Successfully retrieved asset {asset_id}")
 
-        except httpx.HTTPStatusError as e:
-            logger.error(f"{self.name}: HTTP error getting asset: {e.response.status_code} - {e.response.text}")
         except Exception as e:
-            logger.error(f"{self.name}: Error getting asset: {e}")
+            self._set_status_results(was_successful=False, result_details=str(e))
+            self._handle_failure_exception(e)

@@ -123,6 +123,7 @@ class FlowListEpisodes(BaseShotGridNode):
                 ui_options={"hide_property": True},
             )
         )
+        self._create_status_parameters()
 
     def after_value_set(self, parameter: Parameter, value: Any) -> None:
         if parameter.name == "selected_episode":
@@ -370,6 +371,7 @@ class FlowListEpisodes(BaseShotGridNode):
         return episode_list, choices_names
 
     def process(self) -> None:
+        self._clear_execution_status()
         """Process the node - automatically load episodes when run."""
         try:
             # Get current selection to preserve it
@@ -427,8 +429,9 @@ class FlowListEpisodes(BaseShotGridNode):
             # Update the selected episode data
             self._update_selected_episode_data(episodes[selected_index] if selected_index < len(episodes) else {})
 
-            logger.info(f"{self.name}: Successfully loaded {len(episode_list)} episodes")
+            self._set_status_results(was_successful=True, result_details=f"Successfully loaded {len(episode_list)} episodes")
 
         except Exception as e:
-            logger.error(f"{self.name}: Failed to load episodes: {e}")
+            self._set_status_results(was_successful=False, result_details=str(e))
             self._update_option_choices("selected_episode", ["Error loading episodes"], "Error loading episodes")
+            self._handle_failure_exception(e)

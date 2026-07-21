@@ -139,6 +139,7 @@ class FlowGetTaskStatus(BaseShotGridNode):
                 ui_options={"hide_property": True},
             )
         )
+        self._create_status_parameters()
 
     def after_value_set(self, parameter: Parameter, value: Any) -> None:
         """Update task_url when task_id changes."""
@@ -168,6 +169,7 @@ class FlowGetTaskStatus(BaseShotGridNode):
             logger.warning(f"{self.name}: Failed to update task_url: {e}")
 
     def process(self) -> None:
+        self._clear_execution_status()
         """Get comprehensive task information when process is run."""
         try:
             # Get input parameters
@@ -200,11 +202,12 @@ class FlowGetTaskStatus(BaseShotGridNode):
             # Extract and populate all task information
             self._populate_task_information(task_data)
 
-            logger.info(f"{self.name}: Successfully retrieved comprehensive task information for task {task_id}")
+            self._set_status_results(was_successful=True, result_details=f"Successfully retrieved comprehensive task information for task {task_id}")
 
         except Exception as e:
-            logger.error(f"{self.name}: Error getting task information: {e}")
+            self._set_status_results(was_successful=False, result_details=str(e))
             self._clear_all_outputs()
+            self._handle_failure_exception(e)
 
     def _fetch_task_data(self, task_id: int, access_token: str, base_url: str) -> dict | None:
         """Fetch task data from ShotGrid API."""

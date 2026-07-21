@@ -75,6 +75,7 @@ class FlowUpdateEntity(BaseShotGridNode):
                 ui_options={"hide_property": True},
             )
         )
+        self._create_status_parameters()
 
     def after_value_set(self, parameter: Parameter, value: Any) -> None:
         if parameter.name == "entity_id" and value:
@@ -260,10 +261,9 @@ class FlowUpdateEntity(BaseShotGridNode):
 
                 logger.info(f"{self.name}: Created/updated input parameters for {entity_type}")
 
-        except httpx.HTTPStatusError as e:
-            logger.error(f"{self.name}: HTTP error loading entity fields: {e.response.status_code} - {e.response.text}")
         except Exception as e:
-            logger.error(f"{self.name}: Error loading entity fields: {e}")
+            self._set_status_results(was_successful=False, result_details=str(e))
+            self._handle_failure_exception(e)
 
     def _sync_dynamic_parameters(self, attributes: dict) -> None:
         """Sync dynamic input parameters with entity attributes."""
@@ -342,6 +342,7 @@ class FlowUpdateEntity(BaseShotGridNode):
             logger.info(f"{self.name}: Deleted parameter '{param_name}'")
 
     def process(self) -> None:
+        self._clear_execution_status()
         """Update entity information in ShotGrid."""
         # Get and validate input parameters
         entity_type = self.get_parameter_value("entity_type")
@@ -456,7 +457,7 @@ class FlowUpdateEntity(BaseShotGridNode):
                 # Reload entity fields to show the updated values
                 self._load_entity_fields(entity_id, entity_type)
 
-                logger.info(f"{self.name}: Successfully updated {entity_type} {entity_id}")
+                self._set_status_results(was_successful=True, result_details=f"Successfully updated {entity_type} {entity_id}")
 
         except httpx.HTTPStatusError as e:
             logger.error(f"{self.name}: HTTP error updating entity: {e.response.status_code} - {e.response.text}")

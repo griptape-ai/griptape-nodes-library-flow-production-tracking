@@ -176,6 +176,7 @@ class FlowUploadFile(BaseShotGridNode):
                 ui_options={"hide_property": True},
             )
         )
+        self._create_status_parameters()
 
     def after_value_set(self, parameter: Parameter, value: Any) -> None:
         if parameter.name == "entity_id" and value:
@@ -440,6 +441,7 @@ class FlowUploadFile(BaseShotGridNode):
 
     def process(self) -> AsyncResult[None]:
         """Upload file to the specified entity with progress tracking."""
+        self._clear_execution_status()
         try:
             # Get and validate input parameters
             entity_type = self.get_parameter_value("entity_type")
@@ -571,23 +573,16 @@ class FlowUploadFile(BaseShotGridNode):
                     self.parameter_output_values[param_name] = value
                     self.publish_update_to_parameter(param_name, value)
 
-                logger.info(f"{self.name}: Successfully uploaded {self._final_filename} to Version {version_id}")
+                self._set_status_results(was_successful=True, result_details=f"Successfully uploaded {self._final_filename} to Version {version_id}")
 
             yield _finalize
 
-        except httpx.HTTPStatusError as e:
-            error_msg = f"HTTP error uploading file: {e.response.status_code} - {e.response.text}"
-            logger.error(f"{self.name}: {error_msg}")
-            GriptapeNodes.handle_request(
-                SetParameterValueRequest(parameter_name="upload_status", value=error_msg, node_name=self.name)
-            )
-            self.parameter_output_values["upload_status"] = error_msg
-            self.publish_update_to_parameter("upload_status", error_msg)
         except Exception as e:
-            error_msg = f"Error uploading file: {e}"
-            logger.error(f"{self.name}: {error_msg}")
+            error_msg = str(e)
+            self._set_status_results(was_successful=False, result_details=error_msg)
             GriptapeNodes.handle_request(
                 SetParameterValueRequest(parameter_name="upload_status", value=error_msg, node_name=self.name)
             )
             self.parameter_output_values["upload_status"] = error_msg
             self.publish_update_to_parameter("upload_status", error_msg)
+            self._handle_failure_exception(e)

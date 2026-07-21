@@ -26,8 +26,10 @@ class FlowGetAssetTypes(BaseShotGridNode):
                 ui_options={"hide_property": True},
             )
         )
+        self._create_status_parameters()
 
     def process(self) -> None:
+        self._clear_execution_status()
         try:
             # Get input parameters
             project_id = self.get_parameter_value("project_id")
@@ -120,7 +122,8 @@ class FlowGetAssetTypes(BaseShotGridNode):
 
                 # Output the asset types
                 self.parameter_output_values["asset_types"] = asset_types
-                logger.info(f"{self.name}: Found {len(asset_types)} asset types for project {project_id}")
+                self._set_status_results(was_successful=True, result_details=f"Found {len(asset_types)} asset types for project {project_id}")
 
         except Exception as e:
-            logger.error(f"{self.name} encountered an error: {e!s}")
+            self._set_status_results(was_successful=False, result_details=str(e))
+            self._handle_failure_exception(e)

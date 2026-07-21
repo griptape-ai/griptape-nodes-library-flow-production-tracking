@@ -84,6 +84,7 @@ class FlowGetEntityInfo(BaseShotGridNode):
                 ui_options={"hide_property": True},
             )
         )
+        self._create_status_parameters()
 
     def after_value_set(self, parameter: Parameter, value: Any) -> None:
         if parameter.name == "entity_id" and value:
@@ -343,6 +344,7 @@ class FlowGetEntityInfo(BaseShotGridNode):
         self._sync_dynamic_parameters(attributes)
 
     def process(self) -> None:
+        self._clear_execution_status()
         """Get entity information from ShotGrid."""
         try:
             # Get and validate input parameters
@@ -437,9 +439,8 @@ class FlowGetEntityInfo(BaseShotGridNode):
                 # Update entity URL
                 self._update_entity_url()
 
-                logger.info(f"{self.name}: Successfully retrieved {entity_type} {entity_id}")
+                self._set_status_results(was_successful=True, result_details=f"Successfully retrieved {entity_type} {entity_id}")
 
-        except httpx.HTTPStatusError as e:
-            logger.error(f"{self.name}: HTTP error getting entity: {e.response.status_code} - {e.response.text}")
         except Exception as e:
-            logger.error(f"{self.name}: Error getting entity: {e}")
+            self._set_status_results(was_successful=False, result_details=str(e))
+            self._handle_failure_exception(e)

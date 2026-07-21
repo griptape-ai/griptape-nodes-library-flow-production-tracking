@@ -125,6 +125,7 @@ class FlowListUsers(BaseShotGridNode):
                 ui_options={"hide_property": True},
             )
         )
+        self._create_status_parameters()
 
     def after_value_set(self, parameter: Parameter, value: Any) -> None:
         if parameter.name == "selected_user" and value and value != "Load users to see options":
@@ -349,6 +350,7 @@ class FlowListUsers(BaseShotGridNode):
             return users
 
     def process(self) -> None:
+        self._clear_execution_status()
         """Process the node - automatically load users when run."""
         try:
             # Get current selection to preserve it
@@ -401,8 +403,9 @@ class FlowListUsers(BaseShotGridNode):
                 user_list[selected_index] if selected_index < len(user_list) else {}
             )
 
-            logger.info(f"{self.name}: Successfully loaded {len(user_list)} users")
+            self._set_status_results(was_successful=True, result_details=f"Successfully loaded {len(user_list)} users")
 
         except Exception as e:
-            logger.error(f"{self.name}: Failed to load users: {e}")
+            self._set_status_results(was_successful=False, result_details=str(e))
             self._update_option_choices("selected_user", ["Error loading users"], "Error loading users")
+            self._handle_failure_exception(e)

@@ -26,8 +26,10 @@ class FlowGetSchemas(BaseShotGridNode):
                 allowed_modes={ParameterMode.OUTPUT},
             )
         )
+        self._create_status_parameters()
 
     def process(self) -> None:
+        self._clear_execution_status()
         try:
             # Get input parameters
             entity_type = self.get_parameter_value("entity_type")
@@ -59,7 +61,8 @@ class FlowGetSchemas(BaseShotGridNode):
 
                 # Output the schema data
                 self.parameter_output_values["schemas"] = schemas
-                logger.info(f"{self.name}: Retrieved schema data")
+                self._set_status_results(was_successful=True, result_details=f"Retrieved schema data")
 
         except Exception as e:
-            logger.error(f"{self.name} encountered an error: {e!s}")
+            self._set_status_results(was_successful=False, result_details=str(e))
+            self._handle_failure_exception(e)

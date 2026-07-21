@@ -137,6 +137,7 @@ class FlowListShots(BaseShotGridNode):
                 ui_options={"hide_property": True},
             )
         )
+        self._create_status_parameters()
 
     def after_value_set(self, parameter: Parameter, value: Any) -> None:
         if parameter.name == "selected_shot":
@@ -384,6 +385,7 @@ class FlowListShots(BaseShotGridNode):
         return shot_list, choices_names
 
     def process(self) -> None:
+        self._clear_execution_status()
         """Process the node - automatically load shots when run."""
         try:
             current_selection = self.get_parameter_value("selected_shot")
@@ -432,8 +434,9 @@ class FlowListShots(BaseShotGridNode):
 
             self._update_selected_shot_data(shots[selected_index] if selected_index < len(shots) else {})
 
-            logger.info(f"{self.name}: Successfully loaded {len(shot_list)} shots")
+            self._set_status_results(was_successful=True, result_details=f"Successfully loaded {len(shot_list)} shots")
 
         except Exception as e:
-            logger.error(f"{self.name}: Failed to load shots: {e}")
+            self._set_status_results(was_successful=False, result_details=str(e))
             self._update_option_choices("selected_shot", ["Error loading shots"], "Error loading shots")
+            self._handle_failure_exception(e)

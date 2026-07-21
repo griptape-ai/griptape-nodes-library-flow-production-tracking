@@ -168,6 +168,7 @@ class FlowUpdateTask(BaseShotGridNode):
                 ui_options={"hide_property": True},
             )
         )
+        self._create_status_parameters()
 
     def after_value_set(self, parameter: Parameter, value: Any) -> None:
         if parameter.name == "task_id" and value:
@@ -331,6 +332,7 @@ class FlowUpdateTask(BaseShotGridNode):
             self.publish_update_to_parameter(param_name, value)
 
     def process(self) -> None:
+        self._clear_execution_status()
         """Update the task with the provided information."""
         try:
             # Get and validate task ID
@@ -377,9 +379,8 @@ class FlowUpdateTask(BaseShotGridNode):
                 # Update task URL
                 self._update_task_url()
 
-                logger.info(f"{self.name}: Successfully updated task {task_id}")
+                self._set_status_results(was_successful=True, result_details=f"Successfully updated task {task_id}")
 
-        except httpx.HTTPStatusError as e:
-            logger.error(f"{self.name}: HTTP error updating task: {e.response.status_code} - {e.response.text}")
         except Exception as e:
-            logger.error(f"{self.name}: Error updating task: {e}")
+            self._set_status_results(was_successful=False, result_details=str(e))
+            self._handle_failure_exception(e)

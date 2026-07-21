@@ -117,6 +117,7 @@ class FlowCreateTask(BaseShotGridNode):
         # Populate step and user choices after all parameters are added
         self._populate_step_choices()
         self._populate_user_choices()
+        self._create_status_parameters()
 
     def after_value_set(self, parameter: Parameter, value: Any) -> None:
         if parameter.name == "project_id" and value:
@@ -237,6 +238,7 @@ class FlowCreateTask(BaseShotGridNode):
             self._update_option_choices("assignee_id", ["No users available"], "No users available")
 
     def process(self) -> None:
+        self._clear_execution_status()
         try:
             # Get input parameters
             project_id = self.get_parameter_value("project_id")
@@ -357,9 +359,10 @@ class FlowCreateTask(BaseShotGridNode):
                 self.parameter_output_values["created_task"] = created_task
                 self.parameter_output_values["task_id"] = str(task_id)
 
-                logger.info(f"{self.name}: Successfully created task {task_id}")
+                self._set_status_results(was_successful=True, result_details=f"Successfully created task {task_id}")
             else:
                 logger.error(f"{self.name}: Failed to create task")
 
         except Exception as e:
-            logger.error(f"{self.name} encountered an error: {e!s}")
+            self._set_status_results(was_successful=False, result_details=str(e))
+            self._handle_failure_exception(e)

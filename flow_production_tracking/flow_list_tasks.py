@@ -202,6 +202,7 @@ class FlowListTasks(BaseShotGridNode):
         self.parameter_values["selected_task"] = ""
         self.parameter_values["task_data"] = {}
         self.parameter_values["all_tasks"] = []
+        self._create_status_parameters()
 
     def after_value_set(self, parameter: Parameter, value: Any) -> None:
         if parameter.name == "entity_id" and value:
@@ -554,6 +555,7 @@ class FlowListTasks(BaseShotGridNode):
             return []
 
     def process(self) -> None:
+        self._clear_execution_status()
         """Process the node - automatically load tasks when run."""
         try:
             # Get current selection to preserve it
@@ -630,8 +632,9 @@ class FlowListTasks(BaseShotGridNode):
                 task_list[selected_index] if selected_index < len(task_list) else {}
             )
 
-            logger.info(f"{self.name}: Successfully loaded {len(task_list)} tasks")
+            self._set_status_results(was_successful=True, result_details=f"Successfully loaded {len(task_list)} tasks")
 
         except Exception as e:
-            logger.error(f"{self.name}: Failed to load tasks: {e}")
+            self._set_status_results(was_successful=False, result_details=str(e))
             self._update_option_choices("selected_task", ["Error loading tasks"], "Error loading tasks")
+            self._handle_failure_exception(e)

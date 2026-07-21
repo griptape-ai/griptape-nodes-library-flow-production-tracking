@@ -128,6 +128,7 @@ class FlowListSequences(BaseShotGridNode):
                 ui_options={"hide_property": True},
             )
         )
+        self._create_status_parameters()
 
     def after_value_set(self, parameter: Parameter, value: Any) -> None:
         if parameter.name == "selected_sequence":
@@ -363,6 +364,7 @@ class FlowListSequences(BaseShotGridNode):
         return sequence_list, choices_names
 
     def process(self) -> None:
+        self._clear_execution_status()
         """Process the node - automatically load sequences when run."""
         try:
             current_selection = self.get_parameter_value("selected_sequence")
@@ -411,8 +413,9 @@ class FlowListSequences(BaseShotGridNode):
 
             self._update_selected_sequence_data(sequences[selected_index] if selected_index < len(sequences) else {})
 
-            logger.info(f"{self.name}: Successfully loaded {len(sequence_list)} sequences")
+            self._set_status_results(was_successful=True, result_details=f"Successfully loaded {len(sequence_list)} sequences")
 
         except Exception as e:
-            logger.error(f"{self.name}: Failed to load sequences: {e}")
+            self._set_status_results(was_successful=False, result_details=str(e))
             self._update_option_choices("selected_sequence", ["Error loading sequences"], "Error loading sequences")
+            self._handle_failure_exception(e)

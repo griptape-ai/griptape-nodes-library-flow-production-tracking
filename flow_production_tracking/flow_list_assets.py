@@ -137,6 +137,7 @@ class FlowListAssets(BaseShotGridNode):
                 ui_options={"hide_property": True},
             )
         )
+        self._create_status_parameters()
 
     def after_value_set(self, parameter: Parameter, value: Any) -> None:
         if parameter.name == "selected_asset":
@@ -427,6 +428,7 @@ class FlowListAssets(BaseShotGridNode):
         return asset_list, choices_names
 
     def process(self) -> None:
+        self._clear_execution_status()
         """Process the node - automatically load assets when run."""
         try:
             # Get current selection to preserve it
@@ -484,8 +486,9 @@ class FlowListAssets(BaseShotGridNode):
             # Update the selected asset data
             self._update_selected_asset_data(assets[selected_index] if selected_index < len(assets) else {})
 
-            logger.info(f"{self.name}: Successfully loaded {len(asset_list)} assets")
+            self._set_status_results(was_successful=True, result_details=f"Successfully loaded {len(asset_list)} assets")
 
         except Exception as e:
-            logger.error(f"{self.name}: Failed to load assets: {e}")
+            self._set_status_results(was_successful=False, result_details=str(e))
             self._update_option_choices("selected_asset", ["Error loading assets"], "Error loading assets")
+            self._handle_failure_exception(e)

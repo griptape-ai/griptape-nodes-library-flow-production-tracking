@@ -136,6 +136,7 @@ class FlowListProjects(BaseShotGridNode):
                 ui_options={"hide_property": True},
             )
         )
+        self._create_status_parameters()
 
     def _is_template(self, project_data: dict) -> bool:
         """Determine if a project is a template based on various fields."""
@@ -471,6 +472,7 @@ class FlowListProjects(BaseShotGridNode):
         return project_list, choices_names
 
     def process(self) -> None:
+        self._clear_execution_status()
         """Process the node - automatically load projects when run."""
         try:
             # Get current selection to preserve it
@@ -519,8 +521,9 @@ class FlowListProjects(BaseShotGridNode):
             # Update the selected project data
             self._update_project_data(selected_index)
 
-            logger.info(f"{self.name}: Successfully loaded {len(project_list)} projects")
+            self._set_status_results(was_successful=True, result_details=f"Successfully loaded {len(project_list)} projects")
 
         except Exception as e:
-            logger.error(f"{self.name}: Failed to load projects: {e}")
+            self._set_status_results(was_successful=False, result_details=str(e))
             self._update_option_choices("project", ["Error loading projects"], "Error loading projects")
+            self._handle_failure_exception(e)

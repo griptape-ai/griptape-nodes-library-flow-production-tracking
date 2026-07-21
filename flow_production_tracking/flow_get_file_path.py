@@ -60,6 +60,7 @@ class FlowGetFilePath(BaseShotGridNode):
                 placeholder_text="The size of the file in bytes",
             )
         )
+        self._create_status_parameters()
 
     def _resolve_localhost_url(self, file_path: str) -> str:
         """Convert localhost workspace URL to absolute filesystem path."""
@@ -105,6 +106,7 @@ class FlowGetFilePath(BaseShotGridNode):
         return local_path
 
     def process(self) -> None:
+        self._clear_execution_status()
         """Resolve file path from URL or local path."""
         file_input = self.get_parameter_value("file_input")
 
@@ -138,11 +140,8 @@ class FlowGetFilePath(BaseShotGridNode):
             self.publish_update_to_parameter("filename", filename)
             self.publish_update_to_parameter("file_size", str(file_size))
 
-            logger.info(f"{self.name}: Resolved to {local_path} ({file_size} bytes)")
+            self._set_status_results(was_successful=True, result_details=f"Resolved to {local_path} ({file_size} bytes)")
 
-        except httpx.HTTPStatusError as e:
-            error_msg = f"HTTP error: {e.response.status_code} - {e.response.text}"
-            logger.error(f"{self.name}: {error_msg}")
         except Exception as e:
-            error_msg = f"Error resolving file path: {e}"
-            logger.error(f"{self.name}: {error_msg}")
+            self._set_status_results(was_successful=False, result_details=str(e))
+            self._handle_failure_exception(e)
