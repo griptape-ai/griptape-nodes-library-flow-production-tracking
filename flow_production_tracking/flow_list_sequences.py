@@ -147,9 +147,13 @@ class FlowListSequences(BaseShotGridNode):
                         selected_index = i
                         break
 
-                self._update_selected_sequence_data(
-                    sequences[selected_index] if selected_index < len(sequences) else {}
-                )
+                selected_data = sequences[selected_index] if selected_index < len(sequences) else {}
+                seq_id = selected_data.get("id")
+                if seq_id and not self._get_thumbnail_cache_path("Sequence", str(seq_id)):
+                    fresh = self._fetch_single_sequence(seq_id)
+                    if fresh:
+                        selected_data = fresh
+                self._update_selected_sequence_data(selected_data)
         return super().after_value_set(parameter, value)
 
     def _update_selected_sequence_data(self, sequence_data: dict) -> None:

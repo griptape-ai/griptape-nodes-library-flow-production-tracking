@@ -258,6 +258,20 @@ class FlowListProjects(BaseShotGridNode):
                         selected_index = i
                         break
 
+                projects = self.get_parameter_value("all_projects") or []
+                if selected_index < len(projects):
+                    project = projects[selected_index]
+                    project_id = project.get("id")
+                    if project_id and not self._get_thumbnail_cache_path("Project", str(project_id)):
+                        fresh = self._fetch_single_project(project_id)
+                        if fresh:
+                            projects[selected_index] = fresh
+                            GriptapeNodes.handle_request(
+                                SetParameterValueRequest(
+                                    parameter_name="all_projects", value=projects, node_name=self.name
+                                )
+                            )
+                            self.parameter_output_values["all_projects"] = projects
                 self._update_project_data(selected_index)
         return super().after_value_set(parameter, value)
 

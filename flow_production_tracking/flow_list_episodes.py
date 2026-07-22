@@ -144,7 +144,13 @@ class FlowListEpisodes(BaseShotGridNode):
                         selected_index = i
                         break
 
-                self._update_selected_episode_data(episodes[selected_index] if selected_index < len(episodes) else {})
+                selected_data = episodes[selected_index] if selected_index < len(episodes) else {}
+                ep_id = selected_data.get("id")
+                if ep_id and not self._get_thumbnail_cache_path("Episode", str(ep_id)):
+                    fresh = self._fetch_single_episode(ep_id)
+                    if fresh:
+                        selected_data = fresh
+                self._update_selected_episode_data(selected_data)
         return super().after_value_set(parameter, value)
 
     def _update_selected_episode_data(self, episode_data: dict) -> None:

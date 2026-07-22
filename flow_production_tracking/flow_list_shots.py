@@ -156,7 +156,13 @@ class FlowListShots(BaseShotGridNode):
                         selected_index = i
                         break
 
-                self._update_selected_shot_data(shots[selected_index] if selected_index < len(shots) else {})
+                selected_data = shots[selected_index] if selected_index < len(shots) else {}
+                shot_id = selected_data.get("id")
+                if shot_id and not self._get_thumbnail_cache_path("Shot", str(shot_id)):
+                    fresh = self._fetch_single_shot(shot_id)
+                    if fresh:
+                        selected_data = fresh
+                self._update_selected_shot_data(selected_data)
         return super().after_value_set(parameter, value)
 
     def _update_selected_shot_data(self, shot_data: dict) -> None:

@@ -158,7 +158,13 @@ class FlowListAssets(BaseShotGridNode):
                         selected_index = i
                         break
 
-                self._update_selected_asset_data(assets[selected_index] if selected_index < len(assets) else {})
+                selected_data = assets[selected_index] if selected_index < len(assets) else {}
+                asset_id = selected_data.get("id")
+                if asset_id and not self._get_thumbnail_cache_path("Asset", str(asset_id)):
+                    fresh = self._fetch_single_asset(asset_id)
+                    if fresh:
+                        selected_data = fresh
+                self._update_selected_asset_data(selected_data)
         return super().after_value_set(parameter, value)
 
     def _update_selected_asset_data(self, asset_data: dict) -> None:
