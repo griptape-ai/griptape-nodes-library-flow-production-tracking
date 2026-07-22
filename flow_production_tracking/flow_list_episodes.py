@@ -50,7 +50,6 @@ class FlowListEpisodes(BaseShotGridNode):
                 tooltip="The list of episodes",
                 allowed_modes={ParameterMode.OUTPUT},
                 ui_options={"hide_property": True},
-                serializable=False,
             )
         )
         self.add_parameter(
@@ -230,7 +229,8 @@ class FlowListEpisodes(BaseShotGridNode):
                 logger.warning(f"{self.name}: Failed to fetch fresh data for episode {selected_episode_id}")
                 return None
 
-            episodes[selected_index] = fresh_episode_data
+            _stripped = {k: v for k, v in fresh_episode_data.items() if k not in ("sg_thumbnail", "image")}
+            episodes[selected_index] = _stripped
             GriptapeNodes.handle_request(
                 SetParameterValueRequest(parameter_name="all_episodes", value=episodes, node_name=self.name)
             )
@@ -409,11 +409,12 @@ class FlowListEpisodes(BaseShotGridNode):
             # Process episodes to choices
             episode_list, choices_names = self._process_episodes_to_choices(episodes)
 
+            storable_list = [{k: v for k, v in e.items() if k not in ("sg_thumbnail", "image")} for e in episode_list]
             GriptapeNodes.handle_request(
-                SetParameterValueRequest(parameter_name="all_episodes", value=episode_list, node_name=self.name)
+                SetParameterValueRequest(parameter_name="all_episodes", value=storable_list, node_name=self.name)
             )
-            self.parameter_output_values["all_episodes"] = episode_list
-            self.publish_update_to_parameter("all_episodes", episode_list)
+            self.parameter_output_values["all_episodes"] = storable_list
+            self.publish_update_to_parameter("all_episodes", storable_list)
 
             # Determine what to select
             selected_value = choices_names[0] if choices_names else "No episodes available"
