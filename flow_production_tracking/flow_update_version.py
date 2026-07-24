@@ -109,12 +109,14 @@ class FlowUpdateVersion(BaseShotGridNode):
             thumbnail_image = self.get_parameter_value("thumbnail_image")
 
             if not version_id:
+                self._set_status_results(was_successful=False, result_details="version_id is required")
                 logger.error(f"{self.name}: version_id is required")
                 return
 
             try:
                 version_id = int(version_id)
             except (ValueError, TypeError):
+                self._set_status_results(was_successful=False, result_details="version_id must be a valid integer")
                 logger.error(f"{self.name}: version_id must be a valid integer")
                 return
 
@@ -178,6 +180,10 @@ class FlowUpdateVersion(BaseShotGridNode):
 
             # Check if we have any updates (fields or thumbnail)
             if not has_updates and not thumbnail_image:
+                self._set_status_results(
+                    was_successful=False,
+                    result_details="At least one field to update or thumbnail must be provided",
+                )
                 logger.error(f"{self.name}: At least one field to update or thumbnail must be provided")
                 return
 
