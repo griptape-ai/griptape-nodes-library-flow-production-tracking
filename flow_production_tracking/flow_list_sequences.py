@@ -168,7 +168,9 @@ class FlowListSequences(BaseShotGridNode):
         image_url = sequence_data.get("sg_thumbnail") or sequence_data.get("image") or ""
         sequence_id_str = str(sequence_id) if sequence_id else ""
         if image_url:
-            sequence_image = self._download_to_project_inputs(image_url, f"shotgrid/Sequence/{sequence_id_str}/image.jpg") or ""
+            sequence_image = (
+                self._download_to_project_inputs(image_url, f"shotgrid/Sequence/{sequence_id_str}/image.jpg") or ""
+            )
         else:
             sequence_image = self._find_project_thumbnail("Sequence", sequence_id_str) or ""
 
@@ -319,7 +321,9 @@ class FlowListSequences(BaseShotGridNode):
                 if episode_id:
                     try:
                         episode_id_int = int(episode_id)
-                        sequence_episode = ((sequence.get("relationships") or {}).get("episode") or {}).get("data") or {}
+                        sequence_episode = ((sequence.get("relationships") or {}).get("episode") or {}).get(
+                            "data"
+                        ) or {}
                         sequence_episode_id = sequence_episode.get("id")
                         if sequence_episode_id != episode_id_int:
                             continue

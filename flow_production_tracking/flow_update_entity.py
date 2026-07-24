@@ -359,9 +359,7 @@ class FlowUpdateEntity(BaseShotGridNode):
 
         # Collect update data from dynamic parameters (non-None values only)
         update_data = {}
-        dynamic_params = {
-            p.name for p in self.root_ui_element.find_elements_by_type(Parameter) if p.user_defined
-        }
+        dynamic_params = {p.name for p in self.root_ui_element.find_elements_by_type(Parameter) if p.user_defined}
 
         for param_name in dynamic_params:
             param_value = self.get_parameter_value(param_name)

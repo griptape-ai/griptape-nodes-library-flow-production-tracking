@@ -167,7 +167,9 @@ class FlowListEpisodes(BaseShotGridNode):
         image_url = episode_data.get("sg_thumbnail") or episode_data.get("image") or ""
         episode_id_str = str(episode_id) if episode_id else ""
         if image_url:
-            episode_image = self._download_to_project_inputs(image_url, f"shotgrid/Episode/{episode_id_str}/image.jpg") or ""
+            episode_image = (
+                self._download_to_project_inputs(image_url, f"shotgrid/Episode/{episode_id_str}/image.jpg") or ""
+            )
         else:
             episode_image = self._find_project_thumbnail("Episode", episode_id_str) or ""
 

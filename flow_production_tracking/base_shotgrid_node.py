@@ -270,10 +270,7 @@ class BaseShotGridNode(SuccessFailureNode):
                     map_result = GriptapeNodes.handle_request(
                         AttemptMapAbsolutePathToProjectRequest(absolute_path=existing)
                     )
-                    if (
-                        isinstance(map_result, AttemptMapAbsolutePathToProjectResultSuccess)
-                        and map_result.mapped_path
-                    ):
+                    if isinstance(map_result, AttemptMapAbsolutePathToProjectResultSuccess) and map_result.mapped_path:
                         return map_result.mapped_path
                     return str(existing)
             except Exception:
@@ -303,10 +300,7 @@ class BaseShotGridNode(SuccessFailureNode):
                 map_result = GriptapeNodes.handle_request(
                     AttemptMapAbsolutePathToProjectRequest(absolute_path=existing)
                 )
-                if (
-                    isinstance(map_result, AttemptMapAbsolutePathToProjectResultSuccess)
-                    and map_result.mapped_path
-                ):
+                if isinstance(map_result, AttemptMapAbsolutePathToProjectResultSuccess) and map_result.mapped_path:
                     return map_result.mapped_path
                 return str(existing)
         except Exception:

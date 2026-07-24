@@ -265,7 +265,9 @@ class FlowListProjects(BaseShotGridNode):
                     if project_id and not self._find_project_thumbnail("Project", str(project_id)):
                         fresh = self._fetch_single_project(project_id)
                         if fresh:
-                            projects[selected_index] = {k: v for k, v in fresh.items() if k not in ("sg_thumbnail", "image")}
+                            projects[selected_index] = {
+                                k: v for k, v in fresh.items() if k not in ("sg_thumbnail", "image")
+                            }
                             GriptapeNodes.handle_request(
                                 SetParameterValueRequest(
                                     parameter_name="all_projects", value=projects, node_name=self.name
@@ -289,7 +291,9 @@ class FlowListProjects(BaseShotGridNode):
         project_id_str = str(project.get("id", ""))
         image_url = project.get("sg_thumbnail") or project.get("image") or ""
         if image_url:
-            validated_image = self._download_to_project_inputs(image_url, f"shotgrid/Project/{project_id_str}/image.jpg") or ""
+            validated_image = (
+                self._download_to_project_inputs(image_url, f"shotgrid/Project/{project_id_str}/image.jpg") or ""
+            )
         else:
             validated_image = self._find_project_thumbnail("Project", project_id_str) or ""
         if not validated_image:

@@ -363,7 +363,9 @@ class FlowListShots(BaseShotGridNode):
                 "id": shot.get("id"),
                 "code": shot.get("attributes", {}).get("code"),
                 "name": shot.get("attributes", {}).get("name"),
-                "sg_sequence": (((shot.get("relationships") or {}).get("sg_sequence") or {}).get("data") or {}).get("id"),
+                "sg_sequence": (((shot.get("relationships") or {}).get("sg_sequence") or {}).get("data") or {}).get(
+                    "id"
+                ),
                 "sg_status_list": shot.get("attributes", {}).get("sg_status_list"),
                 "image": shot.get("attributes", {}).get("image"),
                 "sg_thumbnail": shot.get("attributes", {}).get("sg_thumbnail"),
