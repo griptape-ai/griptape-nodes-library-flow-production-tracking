@@ -160,7 +160,7 @@ class FlowListAssets(BaseShotGridNode):
 
                 selected_data = assets[selected_index] if selected_index < len(assets) else {}
                 asset_id = selected_data.get("id")
-                if asset_id and not self._get_thumbnail_cache_path("Asset", str(asset_id)):
+                if asset_id and not self._find_project_thumbnail("Asset", str(asset_id)):
                     fresh = self._fetch_single_asset(asset_id)
                     if fresh:
                         selected_data = fresh
@@ -181,10 +181,9 @@ class FlowListAssets(BaseShotGridNode):
         image_url = asset_data.get("sg_thumbnail") or asset_data.get("image") or ""
         asset_id_str = str(asset_id) if asset_id else ""
         if image_url:
-            asset_image = self._cache_thumbnail("Asset", asset_id_str, image_url) or ""
+            asset_image = self._download_to_project_inputs(image_url, f"shotgrid/Asset/{asset_id_str}/image.jpg") or ""
         else:
-            cached = self._get_thumbnail_cache_path("Asset", asset_id_str)
-            asset_image = str(cached) if cached else ""
+            asset_image = self._find_project_thumbnail("Asset", asset_id_str) or ""
 
         # Generate web UI URL
         try:

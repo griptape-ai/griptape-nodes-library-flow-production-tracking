@@ -146,7 +146,7 @@ class FlowListEpisodes(BaseShotGridNode):
 
                 selected_data = episodes[selected_index] if selected_index < len(episodes) else {}
                 ep_id = selected_data.get("id")
-                if ep_id and not self._get_thumbnail_cache_path("Episode", str(ep_id)):
+                if ep_id and not self._find_project_thumbnail("Episode", str(ep_id)):
                     fresh = self._fetch_single_episode(ep_id)
                     if fresh:
                         selected_data = fresh
@@ -167,10 +167,9 @@ class FlowListEpisodes(BaseShotGridNode):
         image_url = episode_data.get("sg_thumbnail") or episode_data.get("image") or ""
         episode_id_str = str(episode_id) if episode_id else ""
         if image_url:
-            episode_image = self._cache_thumbnail("Episode", episode_id_str, image_url) or ""
+            episode_image = self._download_to_project_inputs(image_url, f"shotgrid/Episode/{episode_id_str}/image.jpg") or ""
         else:
-            cached = self._get_thumbnail_cache_path("Episode", episode_id_str)
-            episode_image = str(cached) if cached else ""
+            episode_image = self._find_project_thumbnail("Episode", episode_id_str) or ""
 
         # Generate web UI URL
         try:

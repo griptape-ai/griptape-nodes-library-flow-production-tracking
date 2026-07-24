@@ -149,7 +149,7 @@ class FlowListSequences(BaseShotGridNode):
 
                 selected_data = sequences[selected_index] if selected_index < len(sequences) else {}
                 seq_id = selected_data.get("id")
-                if seq_id and not self._get_thumbnail_cache_path("Sequence", str(seq_id)):
+                if seq_id and not self._find_project_thumbnail("Sequence", str(seq_id)):
                     fresh = self._fetch_single_sequence(seq_id)
                     if fresh:
                         selected_data = fresh
@@ -168,10 +168,9 @@ class FlowListSequences(BaseShotGridNode):
         image_url = sequence_data.get("sg_thumbnail") or sequence_data.get("image") or ""
         sequence_id_str = str(sequence_id) if sequence_id else ""
         if image_url:
-            sequence_image = self._cache_thumbnail("Sequence", sequence_id_str, image_url) or ""
+            sequence_image = self._download_to_project_inputs(image_url, f"shotgrid/Sequence/{sequence_id_str}/image.jpg") or ""
         else:
-            cached = self._get_thumbnail_cache_path("Sequence", sequence_id_str)
-            sequence_image = str(cached) if cached else ""
+            sequence_image = self._find_project_thumbnail("Sequence", sequence_id_str) or ""
 
         try:
             shotgrid_config = self._get_shotgrid_config()

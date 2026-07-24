@@ -262,7 +262,7 @@ class FlowListProjects(BaseShotGridNode):
                 if selected_index < len(projects):
                     project = projects[selected_index]
                     project_id = project.get("id")
-                    if project_id and not self._get_thumbnail_cache_path("Project", str(project_id)):
+                    if project_id and not self._find_project_thumbnail("Project", str(project_id)):
                         fresh = self._fetch_single_project(project_id)
                         if fresh:
                             projects[selected_index] = {k: v for k, v in fresh.items() if k not in ("sg_thumbnail", "image")}
@@ -289,10 +289,11 @@ class FlowListProjects(BaseShotGridNode):
         project_id_str = str(project.get("id", ""))
         image_url = project.get("sg_thumbnail") or project.get("image") or ""
         if image_url:
-            validated_image = self._cache_thumbnail("Project", project_id_str, image_url) or ""
+            validated_image = self._download_to_project_inputs(image_url, f"shotgrid/Project/{project_id_str}/image.jpg") or ""
         else:
-            cached = self._get_thumbnail_cache_path("Project", project_id_str)
-            validated_image = str(cached) if cached else self._create_fallback_image(project_name)
+            validated_image = self._find_project_thumbnail("Project", project_id_str) or ""
+        if not validated_image:
+            validated_image = self._create_fallback_image(project_name)
 
         # Update all project parameters using SetParameterValueRequest
         params = {

@@ -263,19 +263,19 @@ class BaseShotGridNode(SuccessFailureNode):
                 BuiltInSituation.DOWNLOAD_URL,
                 sanitized_url=sanitized_path,
             )
-            # Skip re-download if file already exists on disk
+            # Check for any extension variant — bytes may be coerced to a different ext on write
             try:
                 resolved = Path(dest.resolve())
-                if resolved.exists():
+                for existing in resolved.parent.glob(f"{resolved.stem}.*"):
                     map_result = GriptapeNodes.handle_request(
-                        AttemptMapAbsolutePathToProjectRequest(absolute_path=resolved)
+                        AttemptMapAbsolutePathToProjectRequest(absolute_path=existing)
                     )
                     if (
                         isinstance(map_result, AttemptMapAbsolutePathToProjectResultSuccess)
                         and map_result.mapped_path
                     ):
                         return map_result.mapped_path
-                    return str(resolved)
+                    return str(existing)
             except Exception:
                 pass  # No project loaded or path unresolvable — fall through to download
 
@@ -289,43 +289,29 @@ class BaseShotGridNode(SuccessFailureNode):
             logger.warning(f"{self.name}: Failed to download '{sanitized_path}': {e}")
             return None
 
-    def _get_thumbnail_cache_path(self, entity_type: str, entity_id: str | int) -> Path | None:
-        """Return the cached thumbnail path for an entity if it exists, else None."""
-        if not entity_id:
-            return None
-        cache_dir = Path.home() / ".griptape-nodes" / "shotgrid-thumbnails" / entity_type
-        for ext in ("jpg", "jpeg", "png", "gif", "webp"):
-            path = cache_dir / f"{entity_id}.{ext}"
-            if path.exists():
-                return path
-        return None
-
-    def _cache_thumbnail(self, entity_type: str, entity_id: str | int, url: str) -> str | None:
-        """Download a thumbnail URL, save to local cache, and return the local file path."""
-        if not url or not entity_id:
-            return None
-
-        existing = self._get_thumbnail_cache_path(entity_type, entity_id)
-        if existing:
-            return str(existing)
-
+    def _find_project_thumbnail(self, entity_type: str, entity_id: str) -> str | None:
+        """Return the macro path for a previously downloaded thumbnail, or None."""
         try:
-            url_path = urllib.parse.urlparse(url).path
-            ext = url_path.rsplit(".", 1)[-1][:5] if "." in url_path else "jpg"
-
-            cache_dir = Path.home() / ".griptape-nodes" / "shotgrid-thumbnails" / entity_type
-            cache_dir.mkdir(parents=True, exist_ok=True)
-            cache_path = cache_dir / f"{entity_id}.{ext}"
-
-            with httpx.Client() as client:
-                response = client.get(url, follow_redirects=True, timeout=10)
-                response.raise_for_status()
-                cache_path.write_bytes(response.content)
-
-            return str(cache_path)
-        except Exception as e:
-            logger.warning(f"{self.name}: Failed to cache thumbnail for {entity_type}/{entity_id}: {e}")
-            return None
+            sanitized = f"shotgrid/{entity_type}/{entity_id}/image.jpg"
+            dest = ProjectFileDestination.from_situation(
+                "image.jpg",
+                BuiltInSituation.DOWNLOAD_URL,
+                sanitized_url=sanitized,
+            )
+            resolved = Path(dest.resolve())
+            for existing in resolved.parent.glob(f"{resolved.stem}.*"):
+                map_result = GriptapeNodes.handle_request(
+                    AttemptMapAbsolutePathToProjectRequest(absolute_path=existing)
+                )
+                if (
+                    isinstance(map_result, AttemptMapAbsolutePathToProjectResultSuccess)
+                    and map_result.mapped_path
+                ):
+                    return map_result.mapped_path
+                return str(existing)
+        except Exception:
+            pass
+        return None
 
     def _get_shotgrid_config(self) -> dict:
         """Get ShotGrid configuration values."""

@@ -158,7 +158,7 @@ class FlowListShots(BaseShotGridNode):
 
                 selected_data = shots[selected_index] if selected_index < len(shots) else {}
                 shot_id = selected_data.get("id")
-                if shot_id and not self._get_thumbnail_cache_path("Shot", str(shot_id)):
+                if shot_id and not self._find_project_thumbnail("Shot", str(shot_id)):
                     fresh = self._fetch_single_shot(shot_id)
                     if fresh:
                         selected_data = fresh
@@ -177,10 +177,9 @@ class FlowListShots(BaseShotGridNode):
         image_url = shot_data.get("sg_thumbnail") or shot_data.get("image") or ""
         shot_id_str = str(shot_id) if shot_id else ""
         if image_url:
-            shot_image = self._cache_thumbnail("Shot", shot_id_str, image_url) or ""
+            shot_image = self._download_to_project_inputs(image_url, f"shotgrid/Shot/{shot_id_str}/image.jpg") or ""
         else:
-            cached = self._get_thumbnail_cache_path("Shot", shot_id_str)
-            shot_image = str(cached) if cached else ""
+            shot_image = self._find_project_thumbnail("Shot", shot_id_str) or ""
 
         try:
             shotgrid_config = self._get_shotgrid_config()
