@@ -128,6 +128,7 @@ class FlowGetFilePath(BaseShotGridNode):
 
             # Validate the file exists
             if not os.path.exists(local_path):
+                self._set_status_results(was_successful=False, result_details=f"File not found: {local_path}")
                 logger.error(f"{self.name}: File not found: {local_path}")
                 return
 
