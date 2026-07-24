@@ -3,8 +3,14 @@ import urllib.parse
 from pathlib import Path
 
 import httpx
+from griptape_nodes.common.project_templates.situation import BuiltInSituation
 from griptape_nodes.exe_types.node_types import SuccessFailureNode
 from griptape_nodes.files.file import File
+from griptape_nodes.files.project_file import ProjectFileDestination
+from griptape_nodes.retained_mode.events.project_events import (
+    AttemptMapAbsolutePathToProjectRequest,
+    AttemptMapAbsolutePathToProjectResultSuccess,
+)
 from griptape_nodes.retained_mode.griptape_nodes import GriptapeNodes, logger
 from image_utils import convert_image_for_shotgrid, get_mime_type, should_convert_image
 
@@ -242,6 +248,46 @@ class BaseShotGridNode(SuccessFailureNode):
         except Exception as e:
             logger.error(f"{self.name}: Failed to update {entity_type_plural} thumbnail: {e}")
             raise
+
+    def _download_to_project_inputs(self, url: str, sanitized_path: str) -> str | None:
+        """Download a URL into the project's inputs/ directory using the download_url situation.
+
+        sanitized_path: stable sub-path within inputs/, e.g. 'shotgrid/Asset/123/image.jpg'
+        Returns a macro path string like '{inputs}/shotgrid/...' on success, None on failure.
+        """
+        if not url:
+            return None
+        try:
+            dest = ProjectFileDestination.from_situation(
+                sanitized_path.rsplit("/", 1)[-1],
+                BuiltInSituation.DOWNLOAD_URL,
+                sanitized_url=sanitized_path,
+            )
+            # Skip re-download if file already exists on disk
+            try:
+                resolved = Path(dest.resolve())
+                if resolved.exists():
+                    map_result = GriptapeNodes.handle_request(
+                        AttemptMapAbsolutePathToProjectRequest(absolute_path=resolved)
+                    )
+                    if (
+                        isinstance(map_result, AttemptMapAbsolutePathToProjectResultSuccess)
+                        and map_result.mapped_path
+                    ):
+                        return map_result.mapped_path
+                    return str(resolved)
+            except Exception:
+                pass  # No project loaded or path unresolvable — fall through to download
+
+            with httpx.Client() as client:
+                response = client.get(url, follow_redirects=True, timeout=10)
+                response.raise_for_status()
+
+            file = dest.write_bytes(response.content)
+            return file.location
+        except Exception as e:
+            logger.warning(f"{self.name}: Failed to download '{sanitized_path}': {e}")
+            return None
 
     def _get_thumbnail_cache_path(self, entity_type: str, entity_id: str | int) -> Path | None:
         """Return the cached thumbnail path for an entity if it exists, else None."""

@@ -167,7 +167,7 @@ class FlowListEpisodes(BaseShotGridNode):
         image_url = episode_data.get("sg_thumbnail") or episode_data.get("image") or ""
         episode_id_str = str(episode_id) if episode_id else ""
         if image_url:
-            episode_image = self._cache_thumbnail("Episode", episode_id_str, image_url) or image_url
+            episode_image = self._cache_thumbnail("Episode", episode_id_str, image_url) or ""
         else:
             cached = self._get_thumbnail_cache_path("Episode", episode_id_str)
             episode_image = str(cached) if cached else ""

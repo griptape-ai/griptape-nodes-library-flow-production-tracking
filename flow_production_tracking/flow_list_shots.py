@@ -177,7 +177,7 @@ class FlowListShots(BaseShotGridNode):
         image_url = shot_data.get("sg_thumbnail") or shot_data.get("image") or ""
         shot_id_str = str(shot_id) if shot_id else ""
         if image_url:
-            shot_image = self._cache_thumbnail("Shot", shot_id_str, image_url) or image_url
+            shot_image = self._cache_thumbnail("Shot", shot_id_str, image_url) or ""
         else:
             cached = self._get_thumbnail_cache_path("Shot", shot_id_str)
             shot_image = str(cached) if cached else ""

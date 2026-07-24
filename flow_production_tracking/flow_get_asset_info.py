@@ -15,6 +15,9 @@ from griptape_nodes.retained_mode.events.parameter_events import (
 from griptape_nodes.retained_mode.griptape_nodes import GriptapeNodes, logger
 
 
+_FILE_URL_ATTRS = {"image", "sg_thumbnail"}
+
+
 class FlowGetAssetInfo(BaseShotGridNode):
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
@@ -97,20 +100,32 @@ class FlowGetAssetInfo(BaseShotGridNode):
             logger.warning(f"{self.name}: Error checking connections for '{param_name}': {e}")
             return True
 
+    def _resolve_attr_value(self, param_name: str, attr_value: object, asset_id: str) -> str:
+        """Return the output value for an attribute, downloading file URLs to project inputs."""
+        if attr_value is None:
+            return ""
+        raw = str(attr_value)
+        if param_name in _FILE_URL_ATTRS and raw.startswith(("http://", "https://")):
+            url_path = raw.split("?")[0]  # strip query params for extension detection
+            ext = url_path.rsplit(".", 1)[-1][:5] if "." in url_path else "jpg"
+            sanitized = f"shotgrid/Asset/{asset_id}/{param_name}.{ext}"
+            return self._download_to_project_inputs(raw, sanitized) or ""
+        return raw
+
     def _sync_dynamic_parameters(self, attributes: dict) -> None:
         """Sync dynamic output parameters with asset attributes."""
         current_dynamic_params = {
             p.name for p in self.root_ui_element.find_elements_by_type(Parameter) if p.user_defined
         }
         desired_params = set(attributes.keys())
+        asset_id = str(self.get_parameter_value("asset_id") or "unknown")
 
         logger.info(f"{self.name}: Current dynamic params: {current_dynamic_params}")
         logger.info(f"{self.name}: Desired params: {desired_params}")
 
         # Update existing parameters
         for param_name in current_dynamic_params & desired_params:
-            attr_value = attributes[param_name]
-            value_str = str(attr_value) if attr_value is not None else ""
+            value_str = self._resolve_attr_value(param_name, attributes[param_name], asset_id)
 
             current_value = self.parameter_output_values.get(param_name, "")
             if current_value != value_str:
@@ -122,8 +137,7 @@ class FlowGetAssetInfo(BaseShotGridNode):
 
         # Add new parameters
         for param_name in desired_params - current_dynamic_params:
-            attr_value = attributes[param_name]
-            value_str = str(attr_value) if attr_value is not None else ""
+            value_str = self._resolve_attr_value(param_name, attributes[param_name], asset_id)
 
             GriptapeNodes.handle_request(
                 AddParameterToNodeRequest(

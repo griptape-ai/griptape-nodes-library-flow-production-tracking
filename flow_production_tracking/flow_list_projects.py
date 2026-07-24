@@ -289,7 +289,7 @@ class FlowListProjects(BaseShotGridNode):
         project_id_str = str(project.get("id", ""))
         image_url = project.get("sg_thumbnail") or project.get("image") or ""
         if image_url:
-            validated_image = self._cache_thumbnail("Project", project_id_str, image_url) or image_url
+            validated_image = self._cache_thumbnail("Project", project_id_str, image_url) or ""
         else:
             cached = self._get_thumbnail_cache_path("Project", project_id_str)
             validated_image = str(cached) if cached else self._create_fallback_image(project_name)

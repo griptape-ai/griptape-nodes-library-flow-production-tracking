@@ -168,7 +168,7 @@ class FlowListSequences(BaseShotGridNode):
         image_url = sequence_data.get("sg_thumbnail") or sequence_data.get("image") or ""
         sequence_id_str = str(sequence_id) if sequence_id else ""
         if image_url:
-            sequence_image = self._cache_thumbnail("Sequence", sequence_id_str, image_url) or image_url
+            sequence_image = self._cache_thumbnail("Sequence", sequence_id_str, image_url) or ""
         else:
             cached = self._get_thumbnail_cache_path("Sequence", sequence_id_str)
             sequence_image = str(cached) if cached else ""
