@@ -265,7 +265,7 @@ class FlowListProjects(BaseShotGridNode):
                     if project_id and not self._get_thumbnail_cache_path("Project", str(project_id)):
                         fresh = self._fetch_single_project(project_id)
                         if fresh:
-                            projects[selected_index] = fresh
+                            projects[selected_index] = {k: v for k, v in fresh.items() if k not in ("sg_thumbnail", "image")}
                             GriptapeNodes.handle_request(
                                 SetParameterValueRequest(
                                     parameter_name="all_projects", value=projects, node_name=self.name
