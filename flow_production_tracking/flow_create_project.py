@@ -2,8 +2,8 @@ import httpx
 from base_shotgrid_node import BaseShotGridNode
 from flow_utils import create_shotgrid_api
 from griptape_nodes.exe_types.core_types import Parameter, ParameterGroup, ParameterMessage, ParameterMode
-from griptape_nodes.retained_mode.griptape_nodes import logger
 from griptape_nodes.exe_types.node_types import AsyncResult
+from griptape_nodes.retained_mode.griptape_nodes import logger
 from griptape_nodes.traits.options import Options
 
 

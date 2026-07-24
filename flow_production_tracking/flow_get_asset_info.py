@@ -14,7 +14,6 @@ from griptape_nodes.retained_mode.events.parameter_events import (
 )
 from griptape_nodes.retained_mode.griptape_nodes import GriptapeNodes, logger
 
-
 _FILE_URL_ATTRS = {"image", "sg_thumbnail"}
 
 
