@@ -1,7 +1,9 @@
 import httpx
 from base_shotgrid_node import BaseShotGridNode
-from griptape_nodes.exe_types.core_types import Parameter, ParameterMode
+from griptape_nodes.exe_types.core_types import ParameterMode
 from griptape_nodes.exe_types.node_types import AsyncResult
+from griptape_nodes.exe_types.param_types.parameter_json import ParameterJson
+from griptape_nodes.exe_types.param_types.parameter_string import ParameterString
 from griptape_nodes.retained_mode.griptape_nodes import logger
 
 
@@ -9,29 +11,25 @@ class FlowGetProject(BaseShotGridNode):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.add_parameter(
-            Parameter(
+            ParameterString(
                 name="project_id",
-                output_type="string",
-                type="string",
                 default_value=None,
                 tooltip="The ID of the project to retrieve.",
+                placeholder_text="Enter project ID",
             )
         )
         self.add_parameter(
-            Parameter(
+            ParameterJson(
                 name="project",
-                output_type="json",
-                type="json",
                 default_value=None,
                 tooltip="The project data.",
                 allowed_modes={ParameterMode.OUTPUT},
+                placeholder_text="Project data will be populated here after execution.",
             )
         )
         self.add_parameter(
-            Parameter(
+            ParameterString(
                 name="project_thumbnail",
-                output_type="string",
-                type="string",
                 default_value=None,
                 tooltip="The project thumbnail URL.",
                 allowed_modes={ParameterMode.OUTPUT},
