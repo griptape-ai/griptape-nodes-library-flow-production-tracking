@@ -259,15 +259,15 @@ class FlowListProjects(BaseShotGridNode):
                         break
 
                 projects = self.get_parameter_value("all_projects") or []
+                fresh = None
                 if selected_index < len(projects):
                     project = projects[selected_index]
                     project_id = project.get("id")
                     if project_id and not self._find_project_thumbnail("Project", str(project_id)):
                         fresh = self._fetch_single_project(project_id)
                         if fresh:
-                            projects[selected_index] = {
-                                k: v for k, v in fresh.items() if k not in ("sg_thumbnail", "image")
-                            }
+                            # Store with URL intact so _update_project_data can download the thumbnail
+                            projects[selected_index] = fresh
                             GriptapeNodes.handle_request(
                                 SetParameterValueRequest(
                                     parameter_name="all_projects", value=projects, node_name=self.name
@@ -275,6 +275,17 @@ class FlowListProjects(BaseShotGridNode):
                             )
                             self.parameter_output_values["all_projects"] = projects
                 self._update_project_data(selected_index)
+                if fresh:
+                    # Strip URLs from stored version after display update
+                    projects[selected_index] = {
+                        k: v for k, v in fresh.items() if k not in ("sg_thumbnail", "image")
+                    }
+                    GriptapeNodes.handle_request(
+                        SetParameterValueRequest(
+                            parameter_name="all_projects", value=projects, node_name=self.name
+                        )
+                    )
+                    self.parameter_output_values["all_projects"] = projects
         return super().after_value_set(parameter, value)
 
     def _update_project_data(self, selected_index: int) -> None:
