@@ -3,8 +3,8 @@ from typing import Any
 import httpx
 from base_shotgrid_node import BaseShotGridNode
 from griptape_nodes.exe_types.core_types import Parameter, ParameterMode
+from griptape_nodes.exe_types.node_types import AsyncResult
 from griptape_nodes.exe_types.param_types.parameter_string import ParameterString
-from griptape_nodes.retained_mode.events.node_events import ListParametersOnNodeRequest
 from griptape_nodes.retained_mode.events.parameter_events import (
     AddParameterToNodeRequest,
     GetConnectionsForParameterRequest,
@@ -49,6 +49,7 @@ class FlowGetProjectInfo(BaseShotGridNode):
                 ui_options={"hide_property": True},
             )
         )
+        self._create_status_parameters()
 
     def after_value_set(self, parameter: Parameter, value: Any) -> None:
         if parameter.name == "project_id" and value:
@@ -74,17 +75,6 @@ class FlowGetProjectInfo(BaseShotGridNode):
         self.parameter_output_values["project_url"] = project_url
         self.publish_update_to_parameter("project_url", project_url)
 
-    def _get_current_parameter_names(self) -> set[str]:
-        """Get the actual parameter names that exist on this node."""
-        try:
-            result = GriptapeNodes.handle_request(ListParametersOnNodeRequest(node_name=self.name))
-            if hasattr(result, "parameter_names"):
-                return set(result.parameter_names)
-            return set()
-        except Exception as e:
-            logger.warning(f"{self.name}: Error getting parameter names: {e}")
-            return set()
-
     def _is_parameter_connected(self, param_name: str) -> bool:
         """Check if a parameter has any connections (incoming or outgoing)."""
         try:
@@ -100,18 +90,9 @@ class FlowGetProjectInfo(BaseShotGridNode):
 
     def _sync_dynamic_parameters(self, attributes: dict) -> None:
         """Sync dynamic output parameters with project attributes."""
-        static_params = {
-            "project_url",
-            "project_data",
-            "project_id",
-            "exec_out",
-            "exec_in",
-            "execution_environment",
-            "job_group",
+        current_dynamic_params = {
+            p.name for p in self.root_ui_element.find_elements_by_type(Parameter) if p.user_defined
         }
-
-        all_current_params = self._get_current_parameter_names()
-        current_dynamic_params = all_current_params - static_params
         desired_params = set(attributes.keys())
 
         logger.info(f"{self.name}: Current dynamic params: {current_dynamic_params}")
@@ -165,11 +146,16 @@ class FlowGetProjectInfo(BaseShotGridNode):
             if param_name in self.parameter_output_values:
                 del self.parameter_output_values[param_name]
 
-    def process(self) -> None:
+    def process(self) -> AsyncResult[None]:
+        yield lambda: self._do_process()
+
+    def _do_process(self) -> None:
         """Get project information from ShotGrid."""
+        self._clear_execution_status()
         project_id = self.get_parameter_value("project_id")
 
         if not project_id:
+            self._set_status_results(was_successful=False, result_details="Project ID is required")
             logger.error(f"{self.name}: Project ID is required")
             return
 
@@ -191,6 +177,7 @@ class FlowGetProjectInfo(BaseShotGridNode):
                 project_data = data.get("data", {})
 
                 if not project_data:
+                    self._set_status_results(was_successful=False, result_details="No project data returned")
                     logger.error(f"{self.name}: No project data returned")
                     return
 
@@ -210,9 +197,10 @@ class FlowGetProjectInfo(BaseShotGridNode):
                 # Update project URL
                 self._update_project_url()
 
-                logger.info(f"{self.name}: Successfully retrieved project {project_id}")
+                self._set_status_results(
+                    was_successful=True, result_details=f"Successfully retrieved project {project_id}"
+                )
 
-        except httpx.HTTPStatusError as e:
-            logger.error(f"{self.name}: HTTP error getting project: {e.response.status_code} - {e.response.text}")
         except Exception as e:
-            logger.error(f"{self.name}: Error getting project: {e}")
+            self._set_status_results(was_successful=False, result_details=str(e))
+            self._handle_failure_exception(e)

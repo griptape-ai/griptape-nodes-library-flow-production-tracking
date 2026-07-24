@@ -9,6 +9,7 @@ from griptape_nodes.exe_types.core_types import (
     Parameter,
     ParameterMode,
 )
+from griptape_nodes.exe_types.node_types import AsyncResult
 from griptape_nodes.exe_types.param_types.parameter_bool import ParameterBool
 from griptape_nodes.exe_types.param_types.parameter_image import ParameterImage
 from griptape_nodes.exe_types.param_types.parameter_string import ParameterString
@@ -136,6 +137,7 @@ class FlowListProjects(BaseShotGridNode):
                 ui_options={"hide_property": True},
             )
         )
+        self._create_status_parameters()
 
     def _is_template(self, project_data: dict) -> bool:
         """Determine if a project is a template based on various fields."""
@@ -256,6 +258,22 @@ class FlowListProjects(BaseShotGridNode):
                         selected_index = i
                         break
 
+                projects = self.get_parameter_value("all_projects") or []
+                if selected_index < len(projects):
+                    project = projects[selected_index]
+                    project_id = project.get("id")
+                    if project_id and not self._find_project_thumbnail("Project", str(project_id)):
+                        fresh = self._fetch_single_project(project_id)
+                        if fresh:
+                            projects[selected_index] = {
+                                k: v for k, v in fresh.items() if k not in ("sg_thumbnail", "image")
+                            }
+                            GriptapeNodes.handle_request(
+                                SetParameterValueRequest(
+                                    parameter_name="all_projects", value=projects, node_name=self.name
+                                )
+                            )
+                            self.parameter_output_values["all_projects"] = projects
                 self._update_project_data(selected_index)
         return super().after_value_set(parameter, value)
 
@@ -270,8 +288,16 @@ class FlowListProjects(BaseShotGridNode):
         project_description = project.get("sg_description", "")
         project_url = project.get("url", "")
 
-        # Validate and get a working image
-        validated_image = self._validate_and_get_image(project.get("image"), project_name)
+        project_id_str = str(project.get("id", ""))
+        image_url = project.get("sg_thumbnail") or project.get("image") or ""
+        if image_url:
+            validated_image = (
+                self._download_to_project_inputs(image_url, f"shotgrid/Project/{project_id_str}/image.jpg") or ""
+            )
+        else:
+            validated_image = self._find_project_thumbnail("Project", project_id_str) or ""
+        if not validated_image:
+            validated_image = self._create_fallback_image(project_name)
 
         # Update all project parameters using SetParameterValueRequest
         params = {
@@ -324,8 +350,8 @@ class FlowListProjects(BaseShotGridNode):
                 logger.warning(f"{self.name}: Failed to fetch fresh data for project {selected_project_id}")
                 return None
 
-            # Update the project in all_projects using SetParameterValueRequest
-            projects[selected_index] = fresh_project_data
+            _stripped = {k: v for k, v in fresh_project_data.items() if k not in ("sg_thumbnail", "image")}
+            projects[selected_index] = _stripped
             GriptapeNodes.handle_request(
                 SetParameterValueRequest(parameter_name="all_projects", value=projects, node_name=self.name)
             )
@@ -470,8 +496,12 @@ class FlowListProjects(BaseShotGridNode):
 
         return project_list, choices_names
 
-    def process(self) -> None:
+    def process(self) -> AsyncResult[None]:
+        yield lambda: self._do_process()
+
+    def _do_process(self) -> None:
         """Process the node - automatically load projects when run."""
+        self._clear_execution_status()
         try:
             # Get current selection to preserve it
             current_selection = self.get_parameter_value("project")
@@ -481,6 +511,7 @@ class FlowListProjects(BaseShotGridNode):
             projects = self._fetch_projects_from_api()
 
             if not projects:
+                self._set_status_results(was_successful=True, result_details="No projects found")
                 logger.warning(f"{self.name}: No projects found")
                 self._update_option_choices("project", ["No projects available"], "No projects available")
                 return
@@ -488,12 +519,12 @@ class FlowListProjects(BaseShotGridNode):
             # Process projects to choices
             project_list, choices_names = self._process_projects_to_choices(projects)
 
-            # Store all projects data first using SetParameterValueRequest
+            storable_list = [{k: v for k, v in p.items() if k not in ("sg_thumbnail", "image")} for p in project_list]
             GriptapeNodes.handle_request(
-                SetParameterValueRequest(parameter_name="all_projects", value=project_list, node_name=self.name)
+                SetParameterValueRequest(parameter_name="all_projects", value=storable_list, node_name=self.name)
             )
-            self.parameter_output_values["all_projects"] = project_list
-            self.publish_update_to_parameter("all_projects", project_list)
+            self.parameter_output_values["all_projects"] = storable_list
+            self.publish_update_to_parameter("all_projects", storable_list)
 
             # Determine what to select
             selected_value = choices_names[0] if choices_names else RELOAD_PROJECTS_CHOICE
@@ -519,8 +550,11 @@ class FlowListProjects(BaseShotGridNode):
             # Update the selected project data
             self._update_project_data(selected_index)
 
-            logger.info(f"{self.name}: Successfully loaded {len(project_list)} projects")
+            self._set_status_results(
+                was_successful=True, result_details=f"Successfully loaded {len(project_list)} projects"
+            )
 
         except Exception as e:
-            logger.error(f"{self.name}: Failed to load projects: {e}")
+            self._set_status_results(was_successful=False, result_details=str(e))
             self._update_option_choices("project", ["Error loading projects"], "Error loading projects")
+            self._handle_failure_exception(e)

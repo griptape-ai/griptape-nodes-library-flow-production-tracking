@@ -6,6 +6,7 @@ from griptape_nodes.exe_types.core_types import (
     Parameter,
     ParameterMode,
 )
+from griptape_nodes.exe_types.node_types import AsyncResult
 from griptape_nodes.exe_types.param_types.parameter_string import ParameterString
 from griptape_nodes.retained_mode.events.parameter_events import SetParameterValueRequest
 from griptape_nodes.retained_mode.griptape_nodes import GriptapeNodes, logger
@@ -202,6 +203,7 @@ class FlowListTasks(BaseShotGridNode):
         self.parameter_values["selected_task"] = ""
         self.parameter_values["task_data"] = {}
         self.parameter_values["all_tasks"] = []
+        self._create_status_parameters()
 
     def after_value_set(self, parameter: Parameter, value: Any) -> None:
         if parameter.name == "entity_id" and value:
@@ -479,7 +481,7 @@ class FlowListTasks(BaseShotGridNode):
                                 return {"type": entity_type, "project_id": entity_id}
 
                             # For other entities, get project info from relationships
-                            project_data = entity.get("relationships", {}).get("project", {}).get("data")
+                            project_data = ((entity.get("relationships") or {}).get("project") or {}).get("data")
                             if project_data:
                                 project_id = project_data.get("id")
                                 if project_id:
@@ -553,8 +555,12 @@ class FlowListTasks(BaseShotGridNode):
                 logger.error(f"Failed to get tasks for {entity_type} {entity_id}: {e}")
             return []
 
-    def process(self) -> None:
+    def process(self) -> AsyncResult[None]:
+        yield lambda: self._do_process()
+
+    def _do_process(self) -> None:
         """Process the node - automatically load tasks when run."""
+        self._clear_execution_status()
         try:
             # Get current selection to preserve it
             current_selection = self.get_parameter_value("selected_task")
@@ -564,11 +570,13 @@ class FlowListTasks(BaseShotGridNode):
             entity_type = self.get_parameter_value("entity_type")
 
             if not entity_id:
+                self._set_status_results(was_successful=False, result_details="entity_id is required")
                 logger.warning(f"{self.name}: entity_id is required")
                 self._update_option_choices("selected_task", ["No entity selected"], "No entity selected")
                 return
 
             if not entity_type:
+                self._set_status_results(was_successful=False, result_details="entity_type is required")
                 logger.warning(f"{self.name}: entity_type is required")
                 self._update_option_choices("selected_task", ["No entity type selected"], "No entity type selected")
                 return
@@ -577,6 +585,7 @@ class FlowListTasks(BaseShotGridNode):
             try:
                 entity_id = int(entity_id)
             except (ValueError, TypeError):
+                self._set_status_results(was_successful=False, result_details="entity_id must be a valid integer")
                 logger.error(f"{self.name}: entity_id must be a valid integer")
                 self._update_option_choices("selected_task", ["Invalid entity ID"], "Invalid entity ID")
                 return
@@ -588,6 +597,9 @@ class FlowListTasks(BaseShotGridNode):
             )
 
             if not tasks:
+                self._set_status_results(
+                    was_successful=True, result_details=f"No tasks found for {entity_type} {entity_id}"
+                )
                 logger.warning(f"{self.name}: No tasks found for {entity_type} {entity_id}")
                 self._update_option_choices("selected_task", ["No tasks available"], "No tasks available")
                 return
@@ -630,8 +642,9 @@ class FlowListTasks(BaseShotGridNode):
                 task_list[selected_index] if selected_index < len(task_list) else {}
             )
 
-            logger.info(f"{self.name}: Successfully loaded {len(task_list)} tasks")
+            self._set_status_results(was_successful=True, result_details=f"Successfully loaded {len(task_list)} tasks")
 
         except Exception as e:
-            logger.error(f"{self.name}: Failed to load tasks: {e}")
+            self._set_status_results(was_successful=False, result_details=str(e))
             self._update_option_choices("selected_task", ["Error loading tasks"], "Error loading tasks")
+            self._handle_failure_exception(e)

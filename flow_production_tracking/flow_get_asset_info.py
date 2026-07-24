@@ -3,8 +3,8 @@ from typing import Any
 import httpx
 from base_shotgrid_node import BaseShotGridNode
 from griptape_nodes.exe_types.core_types import Parameter, ParameterMode
+from griptape_nodes.exe_types.node_types import AsyncResult
 from griptape_nodes.exe_types.param_types.parameter_string import ParameterString
-from griptape_nodes.retained_mode.events.node_events import ListParametersOnNodeRequest
 from griptape_nodes.retained_mode.events.parameter_events import (
     AddParameterToNodeRequest,
     GetConnectionsForParameterRequest,
@@ -13,6 +13,8 @@ from griptape_nodes.retained_mode.events.parameter_events import (
     SetParameterValueRequest,
 )
 from griptape_nodes.retained_mode.griptape_nodes import GriptapeNodes, logger
+
+_FILE_URL_ATTRS = {"image", "sg_thumbnail"}
 
 
 class FlowGetAssetInfo(BaseShotGridNode):
@@ -58,6 +60,7 @@ class FlowGetAssetInfo(BaseShotGridNode):
                 allowed_modes={ParameterMode.OUTPUT},
             )
         )
+        self._create_status_parameters()
 
     def after_value_set(self, parameter: Parameter, value: Any) -> None:
         if parameter.name == "asset_id" and value:
@@ -83,17 +86,6 @@ class FlowGetAssetInfo(BaseShotGridNode):
         self.parameter_output_values["asset_url"] = asset_url
         self.publish_update_to_parameter("asset_url", asset_url)
 
-    def _get_current_parameter_names(self) -> set[str]:
-        """Get the actual parameter names that exist on this node."""
-        try:
-            result = GriptapeNodes.handle_request(ListParametersOnNodeRequest(node_name=self.name))
-            if hasattr(result, "parameter_names"):
-                return set(result.parameter_names)
-            return set()
-        except Exception as e:
-            logger.warning(f"{self.name}: Error getting parameter names: {e}")
-            return set()
-
     def _is_parameter_connected(self, param_name: str) -> bool:
         """Check if a parameter has any connections (incoming or outgoing)."""
         try:
@@ -107,30 +99,32 @@ class FlowGetAssetInfo(BaseShotGridNode):
             logger.warning(f"{self.name}: Error checking connections for '{param_name}': {e}")
             return True
 
+    def _resolve_attr_value(self, param_name: str, attr_value: object, asset_id: str) -> str:
+        """Return the output value for an attribute, downloading file URLs to project inputs."""
+        if attr_value is None:
+            return ""
+        raw = str(attr_value)
+        if param_name in _FILE_URL_ATTRS and raw.startswith(("http://", "https://")):
+            url_path = raw.split("?")[0]  # strip query params for extension detection
+            ext = url_path.rsplit(".", 1)[-1][:5] if "." in url_path else "jpg"
+            sanitized = f"shotgrid/Asset/{asset_id}/{param_name}.{ext}"
+            return self._download_to_project_inputs(raw, sanitized) or ""
+        return raw
+
     def _sync_dynamic_parameters(self, attributes: dict) -> None:
         """Sync dynamic output parameters with asset attributes."""
-        static_params = {
-            "asset_url",
-            "asset_data",
-            "asset_id",
-            "project_id",
-            "exec_out",
-            "exec_in",
-            "execution_environment",
-            "job_group",
+        current_dynamic_params = {
+            p.name for p in self.root_ui_element.find_elements_by_type(Parameter) if p.user_defined
         }
-
-        all_current_params = self._get_current_parameter_names()
-        current_dynamic_params = all_current_params - static_params
         desired_params = set(attributes.keys())
+        asset_id = str(self.get_parameter_value("asset_id") or "unknown")
 
         logger.info(f"{self.name}: Current dynamic params: {current_dynamic_params}")
         logger.info(f"{self.name}: Desired params: {desired_params}")
 
         # Update existing parameters
         for param_name in current_dynamic_params & desired_params:
-            attr_value = attributes[param_name]
-            value_str = str(attr_value) if attr_value is not None else ""
+            value_str = self._resolve_attr_value(param_name, attributes[param_name], asset_id)
 
             current_value = self.parameter_output_values.get(param_name, "")
             if current_value != value_str:
@@ -142,8 +136,7 @@ class FlowGetAssetInfo(BaseShotGridNode):
 
         # Add new parameters
         for param_name in desired_params - current_dynamic_params:
-            attr_value = attributes[param_name]
-            value_str = str(attr_value) if attr_value is not None else ""
+            value_str = self._resolve_attr_value(param_name, attributes[param_name], asset_id)
 
             GriptapeNodes.handle_request(
                 AddParameterToNodeRequest(
@@ -175,11 +168,16 @@ class FlowGetAssetInfo(BaseShotGridNode):
             if param_name in self.parameter_output_values:
                 del self.parameter_output_values[param_name]
 
-    def process(self) -> None:
+    def process(self) -> AsyncResult[None]:
+        yield lambda: self._do_process()
+
+    def _do_process(self) -> None:
         """Get asset information from ShotGrid."""
+        self._clear_execution_status()
         asset_id = self.get_parameter_value("asset_id")
 
         if not asset_id:
+            self._set_status_results(was_successful=False, result_details="Asset ID is required")
             logger.error(f"{self.name}: Asset ID is required")
             return
 
@@ -201,6 +199,7 @@ class FlowGetAssetInfo(BaseShotGridNode):
                 asset_data = data.get("data", {})
 
                 if not asset_data:
+                    self._set_status_results(was_successful=False, result_details="No asset data returned")
                     logger.error(f"{self.name}: No asset data returned")
                     return
 
@@ -235,9 +234,8 @@ class FlowGetAssetInfo(BaseShotGridNode):
                 # Update asset URL
                 self._update_asset_url()
 
-                logger.info(f"{self.name}: Successfully retrieved asset {asset_id}")
+                self._set_status_results(was_successful=True, result_details=f"Successfully retrieved asset {asset_id}")
 
-        except httpx.HTTPStatusError as e:
-            logger.error(f"{self.name}: HTTP error getting asset: {e.response.status_code} - {e.response.text}")
         except Exception as e:
-            logger.error(f"{self.name}: Error getting asset: {e}")
+            self._set_status_results(was_successful=False, result_details=str(e))
+            self._handle_failure_exception(e)

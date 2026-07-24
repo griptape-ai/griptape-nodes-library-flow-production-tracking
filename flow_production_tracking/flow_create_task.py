@@ -3,6 +3,7 @@ from typing import Any
 from base_shotgrid_node import BaseShotGridNode
 from flow_utils import create_shotgrid_api
 from griptape_nodes.exe_types.core_types import Parameter, ParameterGroup, ParameterMessage, ParameterMode
+from griptape_nodes.exe_types.node_types import AsyncResult
 from griptape_nodes.retained_mode.griptape_nodes import logger
 from griptape_nodes.traits.options import Options
 
@@ -117,6 +118,7 @@ class FlowCreateTask(BaseShotGridNode):
         # Populate step and user choices after all parameters are added
         self._populate_step_choices()
         self._populate_user_choices()
+        self._create_status_parameters()
 
     def after_value_set(self, parameter: Parameter, value: Any) -> None:
         if parameter.name == "project_id" and value:
@@ -236,7 +238,11 @@ class FlowCreateTask(BaseShotGridNode):
             logger.warning(f"{self.name}: Could not populate user choices: {e}")
             self._update_option_choices("assignee_id", ["No users available"], "No users available")
 
-    def process(self) -> None:
+    def process(self) -> AsyncResult[None]:
+        yield lambda: self._do_process()
+
+    def _do_process(self) -> None:
+        self._clear_execution_status()
         try:
             # Get input parameters
             project_id = self.get_parameter_value("project_id")
@@ -248,14 +254,17 @@ class FlowCreateTask(BaseShotGridNode):
             task_status = self.get_parameter_value("task_status")
 
             if not project_id:
+                self._set_status_results(was_successful=False, result_details="project_id is required")
                 logger.error(f"{self.name}: project_id is required")
                 return
 
             if not entity_id:
+                self._set_status_results(was_successful=False, result_details="entity_id is required")
                 logger.error(f"{self.name}: entity_id is required")
                 return
 
             if not task_content:
+                self._set_status_results(was_successful=False, result_details="task_content is required")
                 logger.error(f"{self.name}: task_content is required")
                 return
 
@@ -264,6 +273,9 @@ class FlowCreateTask(BaseShotGridNode):
                 project_id = int(project_id)
                 entity_id = int(entity_id)
             except (ValueError, TypeError):
+                self._set_status_results(
+                    was_successful=False, result_details="project_id and entity_id must be valid integers"
+                )
                 logger.error(f"{self.name}: project_id and entity_id must be valid integers")
                 return
 
@@ -357,9 +369,11 @@ class FlowCreateTask(BaseShotGridNode):
                 self.parameter_output_values["created_task"] = created_task
                 self.parameter_output_values["task_id"] = str(task_id)
 
-                logger.info(f"{self.name}: Successfully created task {task_id}")
+                self._set_status_results(was_successful=True, result_details=f"Successfully created task {task_id}")
             else:
+                self._set_status_results(was_successful=False, result_details="Failed to create task")
                 logger.error(f"{self.name}: Failed to create task")
 
         except Exception as e:
-            logger.error(f"{self.name} encountered an error: {e!s}")
+            self._set_status_results(was_successful=False, result_details=str(e))
+            self._handle_failure_exception(e)

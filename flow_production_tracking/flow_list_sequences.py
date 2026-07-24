@@ -7,6 +7,7 @@ from griptape_nodes.exe_types.core_types import (
     Parameter,
     ParameterMode,
 )
+from griptape_nodes.exe_types.node_types import AsyncResult
 from griptape_nodes.exe_types.param_types.parameter_image import ParameterImage
 from griptape_nodes.exe_types.param_types.parameter_string import ParameterString
 from griptape_nodes.retained_mode.events.parameter_events import SetParameterValueRequest
@@ -128,6 +129,7 @@ class FlowListSequences(BaseShotGridNode):
                 ui_options={"hide_property": True},
             )
         )
+        self._create_status_parameters()
 
     def after_value_set(self, parameter: Parameter, value: Any) -> None:
         if parameter.name == "selected_sequence":
@@ -145,9 +147,13 @@ class FlowListSequences(BaseShotGridNode):
                         selected_index = i
                         break
 
-                self._update_selected_sequence_data(
-                    sequences[selected_index] if selected_index < len(sequences) else {}
-                )
+                selected_data = sequences[selected_index] if selected_index < len(sequences) else {}
+                seq_id = selected_data.get("id")
+                if seq_id and not self._find_project_thumbnail("Sequence", str(seq_id)):
+                    fresh = self._fetch_single_sequence(seq_id)
+                    if fresh:
+                        selected_data = fresh
+                self._update_selected_sequence_data(selected_data)
         return super().after_value_set(parameter, value)
 
     def _update_selected_sequence_data(self, sequence_data: dict) -> None:
@@ -159,7 +165,14 @@ class FlowListSequences(BaseShotGridNode):
         sequence_data.get("name", f"Sequence {sequence_id}")
         sequence_code = sequence_data.get("code", "")
         sequence_description = sequence_data.get("description") or sequence_data.get("sg_description") or ""
-        sequence_image = sequence_data.get("sg_thumbnail") or sequence_data.get("image", "")
+        image_url = sequence_data.get("sg_thumbnail") or sequence_data.get("image") or ""
+        sequence_id_str = str(sequence_id) if sequence_id else ""
+        if image_url:
+            sequence_image = (
+                self._download_to_project_inputs(image_url, f"shotgrid/Sequence/{sequence_id_str}/image.jpg") or ""
+            )
+        else:
+            sequence_image = self._find_project_thumbnail("Sequence", sequence_id_str) or ""
 
         try:
             shotgrid_config = self._get_shotgrid_config()
@@ -219,7 +232,8 @@ class FlowListSequences(BaseShotGridNode):
                 logger.warning(f"{self.name}: Failed to fetch fresh data for sequence {selected_sequence_id}")
                 return None
 
-            sequences[selected_index] = fresh_sequence_data
+            _stripped = {k: v for k, v in fresh_sequence_data.items() if k not in ("sg_thumbnail", "image")}
+            sequences[selected_index] = _stripped
             GriptapeNodes.handle_request(
                 SetParameterValueRequest(parameter_name="all_sequences", value=sequences, node_name=self.name)
             )
@@ -298,7 +312,7 @@ class FlowListSequences(BaseShotGridNode):
 
             sequences = []
             for sequence in all_sequences:
-                sequence_project = sequence.get("relationships", {}).get("project", {}).get("data", {})
+                sequence_project = ((sequence.get("relationships") or {}).get("project") or {}).get("data") or {}
                 sequence_project_id = sequence_project.get("id")
 
                 if sequence_project_id != project_id:
@@ -307,7 +321,9 @@ class FlowListSequences(BaseShotGridNode):
                 if episode_id:
                     try:
                         episode_id_int = int(episode_id)
-                        sequence_episode = sequence.get("relationships", {}).get("episode", {}).get("data", {})
+                        sequence_episode = ((sequence.get("relationships") or {}).get("episode") or {}).get(
+                            "data"
+                        ) or {}
                         sequence_episode_id = sequence_episode.get("id")
                         if sequence_episode_id != episode_id_int:
                             continue
@@ -329,13 +345,13 @@ class FlowListSequences(BaseShotGridNode):
                 "id": sequence.get("id"),
                 "code": sequence.get("attributes", {}).get("code"),
                 "name": sequence.get("attributes", {}).get("name"),
-                "episode": sequence.get("relationships", {}).get("episode", {}).get("data", {}).get("id"),
+                "episode": (((sequence.get("relationships") or {}).get("episode") or {}).get("data") or {}).get("id"),
                 "sg_status_list": sequence.get("attributes", {}).get("sg_status_list"),
                 "image": sequence.get("attributes", {}).get("image"),
                 "sg_thumbnail": sequence.get("attributes", {}).get("sg_thumbnail"),
                 "description": sequence.get("attributes", {}).get("description"),
                 "sg_description": sequence.get("attributes", {}).get("sg_description"),
-                "project": sequence.get("relationships", {}).get("project", {}).get("data", {}).get("id"),
+                "project": (((sequence.get("relationships") or {}).get("project") or {}).get("data") or {}).get("id"),
             }
             sequence_list.append(sequence_data)
 
@@ -362,13 +378,18 @@ class FlowListSequences(BaseShotGridNode):
 
         return sequence_list, choices_names
 
-    def process(self) -> None:
+    def process(self) -> AsyncResult[None]:
+        yield lambda: self._do_process()
+
+    def _do_process(self) -> None:
         """Process the node - automatically load sequences when run."""
+        self._clear_execution_status()
         try:
             current_selection = self.get_parameter_value("selected_sequence")
 
             project_id = self.get_parameter_value("project_id")
             if not project_id:
+                self._set_status_results(was_successful=False, result_details="project_id is required")
                 logger.warning(f"{self.name}: project_id is required")
                 self._update_option_choices("selected_sequence", ["No project selected"], "No project selected")
                 return
@@ -377,17 +398,21 @@ class FlowListSequences(BaseShotGridNode):
             sequences = self._fetch_sequences_from_api()
 
             if not sequences:
+                self._set_status_results(
+                    was_successful=True, result_details=f"No sequences found for project {project_id}"
+                )
                 logger.warning(f"{self.name}: No sequences found for project {project_id}")
                 self._update_option_choices("selected_sequence", ["No sequences available"], "No sequences available")
                 return
 
             sequence_list, choices_names = self._process_sequences_to_choices(sequences)
 
+            storable_list = [{k: v for k, v in s.items() if k not in ("sg_thumbnail", "image")} for s in sequence_list]
             GriptapeNodes.handle_request(
-                SetParameterValueRequest(parameter_name="all_sequences", value=sequence_list, node_name=self.name)
+                SetParameterValueRequest(parameter_name="all_sequences", value=storable_list, node_name=self.name)
             )
-            self.parameter_output_values["all_sequences"] = sequence_list
-            self.publish_update_to_parameter("all_sequences", sequence_list)
+            self.parameter_output_values["all_sequences"] = storable_list
+            self.publish_update_to_parameter("all_sequences", storable_list)
 
             selected_value = choices_names[0] if choices_names else "No sequences available"
             selected_index = 0
@@ -409,10 +434,15 @@ class FlowListSequences(BaseShotGridNode):
             self._update_option_choices("selected_sequence", choices_names, selected_value)
             logger.info(f"{self.name}: Dropdown updated, selected_value: {selected_value}")
 
-            self._update_selected_sequence_data(sequences[selected_index] if selected_index < len(sequences) else {})
+            self._update_selected_sequence_data(
+                sequence_list[selected_index] if selected_index < len(sequence_list) else {}
+            )
 
-            logger.info(f"{self.name}: Successfully loaded {len(sequence_list)} sequences")
+            self._set_status_results(
+                was_successful=True, result_details=f"Successfully loaded {len(sequence_list)} sequences"
+            )
 
         except Exception as e:
-            logger.error(f"{self.name}: Failed to load sequences: {e}")
+            self._set_status_results(was_successful=False, result_details=str(e))
             self._update_option_choices("selected_sequence", ["Error loading sequences"], "Error loading sequences")
+            self._handle_failure_exception(e)

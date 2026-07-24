@@ -1,6 +1,9 @@
 import httpx
 from base_shotgrid_node import BaseShotGridNode
-from griptape_nodes.exe_types.core_types import Parameter, ParameterMode
+from griptape_nodes.exe_types.core_types import ParameterMode
+from griptape_nodes.exe_types.node_types import AsyncResult
+from griptape_nodes.exe_types.param_types.parameter_json import ParameterJson
+from griptape_nodes.exe_types.param_types.parameter_string import ParameterString
 from griptape_nodes.retained_mode.griptape_nodes import logger
 
 
@@ -8,42 +11,44 @@ class FlowGetProject(BaseShotGridNode):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.add_parameter(
-            Parameter(
+            ParameterString(
                 name="project_id",
-                output_type="string",
-                type="string",
                 default_value=None,
                 tooltip="The ID of the project to retrieve.",
+                placeholder_text="Enter project ID",
             )
         )
         self.add_parameter(
-            Parameter(
+            ParameterJson(
                 name="project",
-                output_type="json",
-                type="json",
                 default_value=None,
                 tooltip="The project data.",
                 allowed_modes={ParameterMode.OUTPUT},
+                placeholder_text="Project data will be populated here after execution.",
             )
         )
         self.add_parameter(
-            Parameter(
+            ParameterString(
                 name="project_thumbnail",
-                output_type="string",
-                type="string",
                 default_value=None,
                 tooltip="The project thumbnail URL.",
                 allowed_modes={ParameterMode.OUTPUT},
                 ui_options={"hide_property": True},
             )
         )
+        self._create_status_parameters()
 
-    def process(self) -> None:
+    def process(self) -> AsyncResult[None]:
+        yield lambda: self._do_process()
+
+    def _do_process(self) -> None:
+        self._clear_execution_status()
         try:
             # Get input parameters
             project_id = self.get_parameter_value("project_id")
 
             if not project_id:
+                self._set_status_results(was_successful=False, result_details="project_id is required")
                 logger.error(f"{self.name}: project_id is required")
                 return
 
@@ -51,6 +56,7 @@ class FlowGetProject(BaseShotGridNode):
             try:
                 project_id = int(project_id)
             except (ValueError, TypeError):
+                self._set_status_results(was_successful=False, result_details="project_id must be a valid integer")
                 logger.error(f"{self.name}: project_id must be a valid integer")
                 return
 
@@ -83,11 +89,9 @@ class FlowGetProject(BaseShotGridNode):
                 # Output the project data and thumbnail
                 self.parameter_output_values["project"] = project
                 self.parameter_output_values["project_thumbnail"] = thumbnail_url
-                logger.info(f"{self.name}: Retrieved project data: {project}")
-                if thumbnail_url:
-                    logger.info(f"{self.name}: Project thumbnail URL: {thumbnail_url}")
-                else:
-                    logger.info(f"{self.name}: No thumbnail found for project")
+                details = f"Retrieved project data (thumbnail: {thumbnail_url if thumbnail_url else 'none'})"
+                self._set_status_results(was_successful=True, result_details=details)
 
         except Exception as e:
-            logger.error(f"{self.name} encountered an error: {e!s}")
+            self._set_status_results(was_successful=False, result_details=str(e))
+            self._handle_failure_exception(e)

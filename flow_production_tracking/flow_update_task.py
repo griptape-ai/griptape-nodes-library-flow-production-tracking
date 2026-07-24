@@ -6,6 +6,7 @@ from griptape_nodes.exe_types.core_types import (
     Parameter,
     ParameterMode,
 )
+from griptape_nodes.exe_types.node_types import AsyncResult
 from griptape_nodes.exe_types.param_types.parameter_string import ParameterString
 from griptape_nodes.retained_mode.events.parameter_events import SetParameterValueRequest
 from griptape_nodes.retained_mode.griptape_nodes import GriptapeNodes, logger
@@ -168,6 +169,7 @@ class FlowUpdateTask(BaseShotGridNode):
                 ui_options={"hide_property": True},
             )
         )
+        self._create_status_parameters()
 
     def after_value_set(self, parameter: Parameter, value: Any) -> None:
         if parameter.name == "task_id" and value:
@@ -330,18 +332,24 @@ class FlowUpdateTask(BaseShotGridNode):
             self.parameter_output_values[param_name] = value
             self.publish_update_to_parameter(param_name, value)
 
-    def process(self) -> None:
+    def process(self) -> AsyncResult[None]:
+        yield lambda: self._do_process()
+
+    def _do_process(self) -> None:
         """Update the task with the provided information."""
+        self._clear_execution_status()
         try:
             # Get and validate task ID
             task_id = self.get_parameter_value("task_id")
             if not task_id:
+                self._set_status_results(was_successful=False, result_details="Task ID is required")
                 logger.error(f"{self.name}: Task ID is required")
                 return
 
             # Prepare update data
             update_data = self._prepare_update_data()
             if not update_data:
+                self._set_status_results(was_successful=False, result_details="No fields to update")
                 logger.warning(f"{self.name}: No fields to update")
                 return
 
@@ -365,6 +373,7 @@ class FlowUpdateTask(BaseShotGridNode):
                 task_data = updated_data.get("data", {})
 
                 if not task_data:
+                    self._set_status_results(was_successful=False, result_details="No task data returned from update")
                     logger.error(f"{self.name}: No task data returned from update")
                     return
 
@@ -377,9 +386,8 @@ class FlowUpdateTask(BaseShotGridNode):
                 # Update task URL
                 self._update_task_url()
 
-                logger.info(f"{self.name}: Successfully updated task {task_id}")
+                self._set_status_results(was_successful=True, result_details=f"Successfully updated task {task_id}")
 
-        except httpx.HTTPStatusError as e:
-            logger.error(f"{self.name}: HTTP error updating task: {e.response.status_code} - {e.response.text}")
         except Exception as e:
-            logger.error(f"{self.name}: Error updating task: {e}")
+            self._set_status_results(was_successful=False, result_details=str(e))
+            self._handle_failure_exception(e)

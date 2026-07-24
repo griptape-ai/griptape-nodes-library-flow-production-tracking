@@ -7,6 +7,7 @@ from griptape_nodes.exe_types.core_types import (
     Parameter,
     ParameterMode,
 )
+from griptape_nodes.exe_types.node_types import AsyncResult
 from griptape_nodes.exe_types.param_types.parameter_image import ParameterImage
 from griptape_nodes.exe_types.param_types.parameter_string import ParameterString
 from griptape_nodes.retained_mode.events.parameter_events import SetParameterValueRequest
@@ -137,6 +138,7 @@ class FlowListAssets(BaseShotGridNode):
                 ui_options={"hide_property": True},
             )
         )
+        self._create_status_parameters()
 
     def after_value_set(self, parameter: Parameter, value: Any) -> None:
         if parameter.name == "selected_asset":
@@ -156,7 +158,13 @@ class FlowListAssets(BaseShotGridNode):
                         selected_index = i
                         break
 
-                self._update_selected_asset_data(assets[selected_index] if selected_index < len(assets) else {})
+                selected_data = assets[selected_index] if selected_index < len(assets) else {}
+                asset_id = selected_data.get("id")
+                if asset_id and not self._find_project_thumbnail("Asset", str(asset_id)):
+                    fresh = self._fetch_single_asset(asset_id)
+                    if fresh:
+                        selected_data = fresh
+                self._update_selected_asset_data(selected_data)
         return super().after_value_set(parameter, value)
 
     def _update_selected_asset_data(self, asset_data: dict) -> None:
@@ -170,7 +178,12 @@ class FlowListAssets(BaseShotGridNode):
         asset_data.get("code", "")
         # Try multiple description fields
         asset_description = asset_data.get("description") or asset_data.get("sg_description") or ""
-        asset_image = asset_data.get("sg_thumbnail") or asset_data.get("image", "")
+        image_url = asset_data.get("sg_thumbnail") or asset_data.get("image") or ""
+        asset_id_str = str(asset_id) if asset_id else ""
+        if image_url:
+            asset_image = self._download_to_project_inputs(image_url, f"shotgrid/Asset/{asset_id_str}/image.jpg") or ""
+        else:
+            asset_image = self._find_project_thumbnail("Asset", asset_id_str) or ""
 
         # Generate web UI URL
         try:
@@ -234,15 +247,14 @@ class FlowListAssets(BaseShotGridNode):
                 logger.warning(f"{self.name}: Failed to fetch fresh data for asset {selected_asset_id}")
                 return None
 
-            # Update the asset in all_assets using SetParameterValueRequest
-            assets[selected_index] = fresh_asset_data
+            _stripped = {k: v for k, v in fresh_asset_data.items() if k not in ("sg_thumbnail", "image")}
+            assets[selected_index] = _stripped
             GriptapeNodes.handle_request(
                 SetParameterValueRequest(parameter_name="all_assets", value=assets, node_name=self.name)
             )
             self.parameter_output_values["all_assets"] = assets
             self.publish_update_to_parameter("all_assets", assets)
 
-            # Update the asset data display
             self._update_selected_asset_data(fresh_asset_data)
 
             logger.info(f"{self.name}: Successfully refreshed asset {selected_asset_id}")
@@ -363,7 +375,7 @@ class FlowListAssets(BaseShotGridNode):
             assets = []
             for asset in all_assets:
                 # Check if asset belongs to the specified project
-                asset_project = asset.get("relationships", {}).get("project", {}).get("data", {})
+                asset_project = ((asset.get("relationships") or {}).get("project") or {}).get("data") or {}
                 asset_project_id = asset_project.get("id")
 
                 if asset_project_id != project_id:
@@ -396,7 +408,7 @@ class FlowListAssets(BaseShotGridNode):
                 "sg_thumbnail": asset.get("attributes", {}).get("sg_thumbnail"),
                 "description": asset.get("attributes", {}).get("description"),
                 "sg_description": asset.get("attributes", {}).get("sg_description"),
-                "project": asset.get("relationships", {}).get("project", {}).get("data", {}).get("id"),
+                "project": (((asset.get("relationships") or {}).get("project") or {}).get("data") or {}).get("id"),
             }
             asset_list.append(asset_data)
 
@@ -426,8 +438,12 @@ class FlowListAssets(BaseShotGridNode):
 
         return asset_list, choices_names
 
-    def process(self) -> None:
+    def process(self) -> AsyncResult[None]:
+        yield lambda: self._do_process()
+
+    def _do_process(self) -> None:
         """Process the node - automatically load assets when run."""
+        self._clear_execution_status()
         try:
             # Get current selection to preserve it
             current_selection = self.get_parameter_value("selected_asset")
@@ -435,6 +451,7 @@ class FlowListAssets(BaseShotGridNode):
             # Get input parameters
             project_id = self.get_parameter_value("project_id")
             if not project_id:
+                self._set_status_results(was_successful=False, result_details="project_id is required")
                 logger.warning(f"{self.name}: project_id is required")
                 self._update_option_choices("selected_asset", ["No project selected"], "No project selected")
                 return
@@ -444,6 +461,9 @@ class FlowListAssets(BaseShotGridNode):
             assets = self._fetch_assets_from_api()
 
             if not assets:
+                self._set_status_results(
+                    was_successful=True, result_details=f"No assets found for project {project_id}"
+                )
                 logger.warning(f"{self.name}: No assets found for project {project_id}")
                 self._update_option_choices("selected_asset", ["No assets available"], "No assets available")
                 return
@@ -451,12 +471,12 @@ class FlowListAssets(BaseShotGridNode):
             # Process assets to choices
             asset_list, choices_names = self._process_assets_to_choices(assets)
 
-            # Store all assets data first using SetParameterValueRequest
+            storable_list = [{k: v for k, v in a.items() if k not in ("sg_thumbnail", "image")} for a in asset_list]
             GriptapeNodes.handle_request(
-                SetParameterValueRequest(parameter_name="all_assets", value=asset_list, node_name=self.name)
+                SetParameterValueRequest(parameter_name="all_assets", value=storable_list, node_name=self.name)
             )
-            self.parameter_output_values["all_assets"] = asset_list
-            self.publish_update_to_parameter("all_assets", asset_list)
+            self.parameter_output_values["all_assets"] = storable_list
+            self.publish_update_to_parameter("all_assets", storable_list)
 
             # Determine what to select
             selected_value = choices_names[0] if choices_names else "No assets available"
@@ -481,11 +501,14 @@ class FlowListAssets(BaseShotGridNode):
             self._update_option_choices("selected_asset", choices_names, selected_value)
             logger.info(f"{self.name}: Dropdown updated, selected_value: {selected_value}")
 
-            # Update the selected asset data
-            self._update_selected_asset_data(assets[selected_index] if selected_index < len(assets) else {})
+            # Update the selected asset data (use processed asset_list, not raw API assets)
+            self._update_selected_asset_data(asset_list[selected_index] if selected_index < len(asset_list) else {})
 
-            logger.info(f"{self.name}: Successfully loaded {len(asset_list)} assets")
+            self._set_status_results(
+                was_successful=True, result_details=f"Successfully loaded {len(asset_list)} assets"
+            )
 
         except Exception as e:
-            logger.error(f"{self.name}: Failed to load assets: {e}")
+            self._set_status_results(was_successful=False, result_details=str(e))
             self._update_option_choices("selected_asset", ["Error loading assets"], "Error loading assets")
+            self._handle_failure_exception(e)

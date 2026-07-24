@@ -3,8 +3,8 @@ from typing import Any
 import httpx
 from base_shotgrid_node import BaseShotGridNode
 from griptape_nodes.exe_types.core_types import Parameter, ParameterMode
+from griptape_nodes.exe_types.node_types import AsyncResult
 from griptape_nodes.exe_types.param_types.parameter_string import ParameterString
-from griptape_nodes.retained_mode.events.node_events import ListParametersOnNodeRequest
 from griptape_nodes.retained_mode.events.parameter_events import (
     AddParameterToNodeRequest,
     GetConnectionsForParameterRequest,
@@ -75,6 +75,7 @@ class FlowUpdateEntity(BaseShotGridNode):
                 ui_options={"hide_property": True},
             )
         )
+        self._create_status_parameters()
 
     def after_value_set(self, parameter: Parameter, value: Any) -> None:
         if parameter.name == "entity_id" and value:
@@ -158,17 +159,6 @@ class FlowUpdateEntity(BaseShotGridNode):
         )
         self.parameter_output_values["entity_url"] = entity_url
         self.publish_update_to_parameter("entity_url", entity_url)
-
-    def _get_current_parameter_names(self) -> set[str]:
-        """Get the actual parameter names that exist on this node."""
-        try:
-            result = GriptapeNodes.handle_request(ListParametersOnNodeRequest(node_name=self.name))
-            if hasattr(result, "parameter_names"):
-                return set(result.parameter_names)
-            return set()
-        except Exception as e:
-            logger.warning(f"{self.name}: Error getting parameter names: {e}")
-            return set()
 
     def _is_parameter_connected(self, param_name: str) -> bool:
         """Check if a parameter has any connections (incoming or outgoing)."""
@@ -260,27 +250,15 @@ class FlowUpdateEntity(BaseShotGridNode):
 
                 logger.info(f"{self.name}: Created/updated input parameters for {entity_type}")
 
-        except httpx.HTTPStatusError as e:
-            logger.error(f"{self.name}: HTTP error loading entity fields: {e.response.status_code} - {e.response.text}")
         except Exception as e:
-            logger.error(f"{self.name}: Error loading entity fields: {e}")
+            logger.error(f"{self.name}: Failed to load entity fields: {e}")
 
     def _sync_dynamic_parameters(self, attributes: dict) -> None:
         """Sync dynamic input parameters with entity attributes."""
         # Static parameters that should never be deleted
-        static_params = {
-            "entity_url",
-            "updated_entity",
-            "entity_type",
-            "entity_id",
-            "exec_out",
-            "exec_in",
-            "execution_environment",
-            "job_group",
+        current_dynamic_params = {
+            p.name for p in self.root_ui_element.find_elements_by_type(Parameter) if p.user_defined
         }
-
-        all_current_params = self._get_current_parameter_names()
-        current_dynamic_params = all_current_params - static_params
         desired_params = set(attributes.keys())
 
         logger.info(f"{self.name}: Current dynamic params: {current_dynamic_params}")
@@ -341,13 +319,18 @@ class FlowUpdateEntity(BaseShotGridNode):
 
             logger.info(f"{self.name}: Deleted parameter '{param_name}'")
 
-    def process(self) -> None:
+    def process(self) -> AsyncResult[None]:
+        yield lambda: self._do_process()
+
+    def _do_process(self) -> None:
         """Update entity information in ShotGrid."""
+        self._clear_execution_status()
         # Get and validate input parameters
         entity_type = self.get_parameter_value("entity_type")
         entity_id = self.get_parameter_value("entity_id")
 
         if not entity_id:
+            self._set_status_results(was_successful=False, result_details="Entity ID is required")
             logger.error(f"{self.name}: Entity ID is required")
             return
 
@@ -356,6 +339,10 @@ class FlowUpdateEntity(BaseShotGridNode):
             logger.info(f"{self.name}: Entity type is 'Unknown', attempting auto-detection...")
             entity_type = self._detect_entity_type(entity_id)
             if not entity_type:
+                self._set_status_results(
+                    was_successful=False,
+                    result_details=f"Could not auto-detect entity type for ID {entity_id}",
+                )
                 logger.error(f"{self.name}: Could not auto-detect entity type for ID {entity_id}")
                 return
 
@@ -371,20 +358,8 @@ class FlowUpdateEntity(BaseShotGridNode):
             logger.warning(f"{self.name}: Unknown entity type '{entity_type}', proceeding anyway")
 
         # Collect update data from dynamic parameters (non-None values only)
-        static_params = {
-            "entity_url",
-            "updated_entity",
-            "entity_type",
-            "entity_id",
-            "exec_out",
-            "exec_in",
-            "execution_environment",
-            "job_group",
-        }
-
         update_data = {}
-        all_params = self._get_current_parameter_names()
-        dynamic_params = all_params - static_params
+        dynamic_params = {p.name for p in self.root_ui_element.find_elements_by_type(Parameter) if p.user_defined}
 
         for param_name in dynamic_params:
             param_value = self.get_parameter_value(param_name)
@@ -394,6 +369,9 @@ class FlowUpdateEntity(BaseShotGridNode):
                 logger.info(f"{self.name}: Will update '{param_name}' to '{param_value}'")
 
         if not update_data:
+            self._set_status_results(
+                was_successful=False, result_details="No fields to update (all dynamic parameters are None)"
+            )
             logger.error(f"{self.name}: No fields to update (all dynamic parameters are None)")
             return
 
@@ -440,6 +418,7 @@ class FlowUpdateEntity(BaseShotGridNode):
                 updated_entity = data.get("data", {})
 
                 if not updated_entity:
+                    self._set_status_results(was_successful=False, result_details="No entity data returned from update")
                     logger.error(f"{self.name}: No entity data returned from update")
                     return
 
@@ -456,9 +435,15 @@ class FlowUpdateEntity(BaseShotGridNode):
                 # Reload entity fields to show the updated values
                 self._load_entity_fields(entity_id, entity_type)
 
-                logger.info(f"{self.name}: Successfully updated {entity_type} {entity_id}")
+                self._set_status_results(
+                    was_successful=True, result_details=f"Successfully updated {entity_type} {entity_id}"
+                )
 
         except httpx.HTTPStatusError as e:
+            self._set_status_results(was_successful=False, result_details=str(e))
             logger.error(f"{self.name}: HTTP error updating entity: {e.response.status_code} - {e.response.text}")
+            self._handle_failure_exception(e)
         except Exception as e:
+            self._set_status_results(was_successful=False, result_details=str(e))
             logger.error(f"{self.name}: Error updating entity: {e}")
+            self._handle_failure_exception(e)

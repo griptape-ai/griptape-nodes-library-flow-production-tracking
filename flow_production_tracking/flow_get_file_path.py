@@ -1,8 +1,8 @@
 import os
 
-import httpx
 from base_shotgrid_node import BaseShotGridNode
 from griptape_nodes.exe_types.core_types import ParameterMode
+from griptape_nodes.exe_types.node_types import AsyncResult
 from griptape_nodes.exe_types.param_types.parameter_string import ParameterString
 from griptape_nodes.files.file import File
 from griptape_nodes.retained_mode.griptape_nodes import GriptapeNodes, logger
@@ -60,6 +60,7 @@ class FlowGetFilePath(BaseShotGridNode):
                 placeholder_text="The size of the file in bytes",
             )
         )
+        self._create_status_parameters()
 
     def _resolve_localhost_url(self, file_path: str) -> str:
         """Convert localhost workspace URL to absolute filesystem path."""
@@ -104,11 +105,16 @@ class FlowGetFilePath(BaseShotGridNode):
         logger.info(f"{self.name}: Downloaded {len(file_content)} bytes")
         return local_path
 
-    def process(self) -> None:
+    def process(self) -> AsyncResult[None]:
+        yield lambda: self._do_process()
+
+    def _do_process(self) -> None:
         """Resolve file path from URL or local path."""
+        self._clear_execution_status()
         file_input = self.get_parameter_value("file_input")
 
         if not file_input:
+            self._set_status_results(was_successful=False, result_details="No file input provided")
             logger.warning(f"{self.name}: No file input provided")
             return
 
@@ -138,11 +144,10 @@ class FlowGetFilePath(BaseShotGridNode):
             self.publish_update_to_parameter("filename", filename)
             self.publish_update_to_parameter("file_size", str(file_size))
 
-            logger.info(f"{self.name}: Resolved to {local_path} ({file_size} bytes)")
+            self._set_status_results(
+                was_successful=True, result_details=f"Resolved to {local_path} ({file_size} bytes)"
+            )
 
-        except httpx.HTTPStatusError as e:
-            error_msg = f"HTTP error: {e.response.status_code} - {e.response.text}"
-            logger.error(f"{self.name}: {error_msg}")
         except Exception as e:
-            error_msg = f"Error resolving file path: {e}"
-            logger.error(f"{self.name}: {error_msg}")
+            self._set_status_results(was_successful=False, result_details=str(e))
+            self._handle_failure_exception(e)

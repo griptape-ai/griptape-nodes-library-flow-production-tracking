@@ -7,6 +7,7 @@ from griptape_nodes.exe_types.core_types import (
     Parameter,
     ParameterMode,
 )
+from griptape_nodes.exe_types.node_types import AsyncResult
 from griptape_nodes.exe_types.param_types.parameter_image import ParameterImage
 from griptape_nodes.exe_types.param_types.parameter_string import ParameterString
 from griptape_nodes.retained_mode.events.parameter_events import SetParameterValueRequest
@@ -123,6 +124,7 @@ class FlowListEpisodes(BaseShotGridNode):
                 ui_options={"hide_property": True},
             )
         )
+        self._create_status_parameters()
 
     def after_value_set(self, parameter: Parameter, value: Any) -> None:
         if parameter.name == "selected_episode":
@@ -142,7 +144,13 @@ class FlowListEpisodes(BaseShotGridNode):
                         selected_index = i
                         break
 
-                self._update_selected_episode_data(episodes[selected_index] if selected_index < len(episodes) else {})
+                selected_data = episodes[selected_index] if selected_index < len(episodes) else {}
+                ep_id = selected_data.get("id")
+                if ep_id and not self._find_project_thumbnail("Episode", str(ep_id)):
+                    fresh = self._fetch_single_episode(ep_id)
+                    if fresh:
+                        selected_data = fresh
+                self._update_selected_episode_data(selected_data)
         return super().after_value_set(parameter, value)
 
     def _update_selected_episode_data(self, episode_data: dict) -> None:
@@ -156,7 +164,14 @@ class FlowListEpisodes(BaseShotGridNode):
         episode_code = episode_data.get("code", "")
         # Try multiple description fields
         episode_description = episode_data.get("description") or episode_data.get("sg_description") or ""
-        episode_image = episode_data.get("sg_thumbnail") or episode_data.get("image", "")
+        image_url = episode_data.get("sg_thumbnail") or episode_data.get("image") or ""
+        episode_id_str = str(episode_id) if episode_id else ""
+        if image_url:
+            episode_image = (
+                self._download_to_project_inputs(image_url, f"shotgrid/Episode/{episode_id_str}/image.jpg") or ""
+            )
+        else:
+            episode_image = self._find_project_thumbnail("Episode", episode_id_str) or ""
 
         # Generate web UI URL
         try:
@@ -221,15 +236,14 @@ class FlowListEpisodes(BaseShotGridNode):
                 logger.warning(f"{self.name}: Failed to fetch fresh data for episode {selected_episode_id}")
                 return None
 
-            # Update the episode in all_episodes using SetParameterValueRequest
-            episodes[selected_index] = fresh_episode_data
+            _stripped = {k: v for k, v in fresh_episode_data.items() if k not in ("sg_thumbnail", "image")}
+            episodes[selected_index] = _stripped
             GriptapeNodes.handle_request(
                 SetParameterValueRequest(parameter_name="all_episodes", value=episodes, node_name=self.name)
             )
             self.parameter_output_values["all_episodes"] = episodes
             self.publish_update_to_parameter("all_episodes", episodes)
 
-            # Update the episode data display
             self._update_selected_episode_data(fresh_episode_data)
 
             logger.info(f"{self.name}: Successfully refreshed episode {selected_episode_id}")
@@ -313,7 +327,7 @@ class FlowListEpisodes(BaseShotGridNode):
             episodes = []
             for episode in all_episodes:
                 # Check if episode belongs to the specified project
-                episode_project = episode.get("relationships", {}).get("project", {}).get("data", {})
+                episode_project = ((episode.get("relationships") or {}).get("project") or {}).get("data") or {}
                 episode_project_id = episode_project.get("id")
 
                 if episode_project_id != project_id:
@@ -339,7 +353,7 @@ class FlowListEpisodes(BaseShotGridNode):
                 "sg_thumbnail": episode.get("attributes", {}).get("sg_thumbnail"),
                 "description": episode.get("attributes", {}).get("description"),
                 "sg_description": episode.get("attributes", {}).get("sg_description"),
-                "project": episode.get("relationships", {}).get("project", {}).get("data", {}).get("id"),
+                "project": (((episode.get("relationships") or {}).get("project") or {}).get("data") or {}).get("id"),
             }
             episode_list.append(episode_data)
 
@@ -369,8 +383,12 @@ class FlowListEpisodes(BaseShotGridNode):
 
         return episode_list, choices_names
 
-    def process(self) -> None:
+    def process(self) -> AsyncResult[None]:
+        yield lambda: self._do_process()
+
+    def _do_process(self) -> None:
         """Process the node - automatically load episodes when run."""
+        self._clear_execution_status()
         try:
             # Get current selection to preserve it
             current_selection = self.get_parameter_value("selected_episode")
@@ -378,6 +396,7 @@ class FlowListEpisodes(BaseShotGridNode):
             # Get input parameters
             project_id = self.get_parameter_value("project_id")
             if not project_id:
+                self._set_status_results(was_successful=False, result_details="project_id is required")
                 logger.warning(f"{self.name}: project_id is required")
                 self._update_option_choices("selected_episode", ["No project selected"], "No project selected")
                 return
@@ -387,6 +406,9 @@ class FlowListEpisodes(BaseShotGridNode):
             episodes = self._fetch_episodes_from_api()
 
             if not episodes:
+                self._set_status_results(
+                    was_successful=True, result_details=f"No episodes found for project {project_id}"
+                )
                 logger.warning(f"{self.name}: No episodes found for project {project_id}")
                 self._update_option_choices("selected_episode", ["No episodes available"], "No episodes available")
                 return
@@ -394,12 +416,12 @@ class FlowListEpisodes(BaseShotGridNode):
             # Process episodes to choices
             episode_list, choices_names = self._process_episodes_to_choices(episodes)
 
-            # Store all episodes data first using SetParameterValueRequest
+            storable_list = [{k: v for k, v in e.items() if k not in ("sg_thumbnail", "image")} for e in episode_list]
             GriptapeNodes.handle_request(
-                SetParameterValueRequest(parameter_name="all_episodes", value=episode_list, node_name=self.name)
+                SetParameterValueRequest(parameter_name="all_episodes", value=storable_list, node_name=self.name)
             )
-            self.parameter_output_values["all_episodes"] = episode_list
-            self.publish_update_to_parameter("all_episodes", episode_list)
+            self.parameter_output_values["all_episodes"] = storable_list
+            self.publish_update_to_parameter("all_episodes", storable_list)
 
             # Determine what to select
             selected_value = choices_names[0] if choices_names else "No episodes available"
@@ -425,10 +447,15 @@ class FlowListEpisodes(BaseShotGridNode):
             logger.info(f"{self.name}: Dropdown updated, selected_value: {selected_value}")
 
             # Update the selected episode data
-            self._update_selected_episode_data(episodes[selected_index] if selected_index < len(episodes) else {})
+            self._update_selected_episode_data(
+                episode_list[selected_index] if selected_index < len(episode_list) else {}
+            )
 
-            logger.info(f"{self.name}: Successfully loaded {len(episode_list)} episodes")
+            self._set_status_results(
+                was_successful=True, result_details=f"Successfully loaded {len(episode_list)} episodes"
+            )
 
         except Exception as e:
-            logger.error(f"{self.name}: Failed to load episodes: {e}")
+            self._set_status_results(was_successful=False, result_details=str(e))
             self._update_option_choices("selected_episode", ["Error loading episodes"], "Error loading episodes")
+            self._handle_failure_exception(e)

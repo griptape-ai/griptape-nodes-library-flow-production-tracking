@@ -1,6 +1,9 @@
 import httpx
 from base_shotgrid_node import BaseShotGridNode
-from griptape_nodes.exe_types.core_types import Parameter, ParameterMode
+from griptape_nodes.exe_types.core_types import ParameterMode
+from griptape_nodes.exe_types.node_types import AsyncResult
+from griptape_nodes.exe_types.param_types.parameter_json import ParameterJson
+from griptape_nodes.exe_types.param_types.parameter_string import ParameterString
 from griptape_nodes.retained_mode.griptape_nodes import logger
 
 
@@ -8,26 +11,28 @@ class FlowGetSchemas(BaseShotGridNode):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.add_parameter(
-            Parameter(
+            ParameterString(
                 name="entity_type",
-                output_type="string",
-                type="string",
                 default_value=None,
+                placeholder_text="Enter entity type (e.g., 'Project', 'Asset', 'Task') or leave empty for all schemas",
                 tooltip="The entity type to get schema for (e.g., 'Project', 'Asset', 'Task'). Leave empty to get all schemas.",
             )
         )
         self.add_parameter(
-            Parameter(
+            ParameterJson(
                 name="schemas",
-                output_type="json",
-                type="json",
                 default_value=None,
                 tooltip="The schema data for the requested entity type(s).",
                 allowed_modes={ParameterMode.OUTPUT},
             )
         )
+        self._create_status_parameters()
 
-    def process(self) -> None:
+    def process(self) -> AsyncResult[None]:
+        yield lambda: self._do_process()
+
+    def _do_process(self) -> None:
+        self._clear_execution_status()
         try:
             # Get input parameters
             entity_type = self.get_parameter_value("entity_type")
@@ -59,7 +64,8 @@ class FlowGetSchemas(BaseShotGridNode):
 
                 # Output the schema data
                 self.parameter_output_values["schemas"] = schemas
-                logger.info(f"{self.name}: Retrieved schema data")
+                self._set_status_results(was_successful=True, result_details="Retrieved schema data")
 
         except Exception as e:
-            logger.error(f"{self.name} encountered an error: {e!s}")
+            self._set_status_results(was_successful=False, result_details=str(e))
+            self._handle_failure_exception(e)

@@ -7,6 +7,7 @@ from griptape_nodes.exe_types.core_types import (
     Parameter,
     ParameterMode,
 )
+from griptape_nodes.exe_types.node_types import AsyncResult
 from griptape_nodes.exe_types.param_types.parameter_image import ParameterImage
 from griptape_nodes.exe_types.param_types.parameter_string import ParameterString
 from griptape_nodes.retained_mode.events.parameter_events import SetParameterValueRequest
@@ -137,6 +138,7 @@ class FlowListShots(BaseShotGridNode):
                 ui_options={"hide_property": True},
             )
         )
+        self._create_status_parameters()
 
     def after_value_set(self, parameter: Parameter, value: Any) -> None:
         if parameter.name == "selected_shot":
@@ -154,7 +156,13 @@ class FlowListShots(BaseShotGridNode):
                         selected_index = i
                         break
 
-                self._update_selected_shot_data(shots[selected_index] if selected_index < len(shots) else {})
+                selected_data = shots[selected_index] if selected_index < len(shots) else {}
+                shot_id = selected_data.get("id")
+                if shot_id and not self._find_project_thumbnail("Shot", str(shot_id)):
+                    fresh = self._fetch_single_shot(shot_id)
+                    if fresh:
+                        selected_data = fresh
+                self._update_selected_shot_data(selected_data)
         return super().after_value_set(parameter, value)
 
     def _update_selected_shot_data(self, shot_data: dict) -> None:
@@ -166,7 +174,12 @@ class FlowListShots(BaseShotGridNode):
         shot_data.get("name", f"Shot {shot_id}")
         shot_code = shot_data.get("code", "")
         shot_description = shot_data.get("description") or shot_data.get("sg_description") or ""
-        shot_image = shot_data.get("sg_thumbnail") or shot_data.get("image", "")
+        image_url = shot_data.get("sg_thumbnail") or shot_data.get("image") or ""
+        shot_id_str = str(shot_id) if shot_id else ""
+        if image_url:
+            shot_image = self._download_to_project_inputs(image_url, f"shotgrid/Shot/{shot_id_str}/image.jpg") or ""
+        else:
+            shot_image = self._find_project_thumbnail("Shot", shot_id_str) or ""
 
         try:
             shotgrid_config = self._get_shotgrid_config()
@@ -226,7 +239,8 @@ class FlowListShots(BaseShotGridNode):
                 logger.warning(f"{self.name}: Failed to fetch fresh data for shot {selected_shot_id}")
                 return None
 
-            shots[selected_index] = fresh_shot_data
+            _stripped = {k: v for k, v in fresh_shot_data.items() if k not in ("sg_thumbnail", "image")}
+            shots[selected_index] = _stripped
             GriptapeNodes.handle_request(
                 SetParameterValueRequest(parameter_name="all_shots", value=shots, node_name=self.name)
             )
@@ -308,7 +322,7 @@ class FlowListShots(BaseShotGridNode):
 
             shots = []
             for shot in all_shots:
-                shot_project = shot.get("relationships", {}).get("project", {}).get("data", {})
+                shot_project = ((shot.get("relationships") or {}).get("project") or {}).get("data") or {}
                 shot_project_id = shot_project.get("id")
 
                 if shot_project_id != project_id:
@@ -317,7 +331,7 @@ class FlowListShots(BaseShotGridNode):
                 if sequence_id:
                     try:
                         sequence_id_int = int(sequence_id)
-                        shot_sequence = shot.get("relationships", {}).get("sg_sequence", {}).get("data", {})
+                        shot_sequence = ((shot.get("relationships") or {}).get("sg_sequence") or {}).get("data") or {}
                         shot_sequence_id = shot_sequence.get("id")
                         if shot_sequence_id != sequence_id_int:
                             continue
@@ -327,7 +341,7 @@ class FlowListShots(BaseShotGridNode):
                 if episode_id:
                     try:
                         episode_id_int = int(episode_id)
-                        shot_episode = shot.get("relationships", {}).get("episode", {}).get("data", {})
+                        shot_episode = ((shot.get("relationships") or {}).get("episode") or {}).get("data") or {}
                         shot_episode_id = shot_episode.get("id")
                         if shot_episode_id != episode_id_int:
                             continue
@@ -349,14 +363,16 @@ class FlowListShots(BaseShotGridNode):
                 "id": shot.get("id"),
                 "code": shot.get("attributes", {}).get("code"),
                 "name": shot.get("attributes", {}).get("name"),
-                "sg_sequence": shot.get("relationships", {}).get("sg_sequence", {}).get("data", {}).get("id"),
+                "sg_sequence": (((shot.get("relationships") or {}).get("sg_sequence") or {}).get("data") or {}).get(
+                    "id"
+                ),
                 "sg_status_list": shot.get("attributes", {}).get("sg_status_list"),
                 "image": shot.get("attributes", {}).get("image"),
                 "sg_thumbnail": shot.get("attributes", {}).get("sg_thumbnail"),
                 "description": shot.get("attributes", {}).get("description"),
                 "sg_description": shot.get("attributes", {}).get("sg_description"),
-                "project": shot.get("relationships", {}).get("project", {}).get("data", {}).get("id"),
-                "episode": shot.get("relationships", {}).get("episode", {}).get("data", {}).get("id"),
+                "project": (((shot.get("relationships") or {}).get("project") or {}).get("data") or {}).get("id"),
+                "episode": (((shot.get("relationships") or {}).get("episode") or {}).get("data") or {}).get("id"),
             }
             shot_list.append(shot_data)
 
@@ -383,13 +399,18 @@ class FlowListShots(BaseShotGridNode):
 
         return shot_list, choices_names
 
-    def process(self) -> None:
+    def process(self) -> AsyncResult[None]:
+        yield lambda: self._do_process()
+
+    def _do_process(self) -> None:
         """Process the node - automatically load shots when run."""
+        self._clear_execution_status()
         try:
             current_selection = self.get_parameter_value("selected_shot")
 
             project_id = self.get_parameter_value("project_id")
             if not project_id:
+                self._set_status_results(was_successful=False, result_details="project_id is required")
                 logger.warning(f"{self.name}: project_id is required")
                 self._update_option_choices("selected_shot", ["No project selected"], "No project selected")
                 return
@@ -398,17 +419,19 @@ class FlowListShots(BaseShotGridNode):
             shots = self._fetch_shots_from_api()
 
             if not shots:
+                self._set_status_results(was_successful=True, result_details=f"No shots found for project {project_id}")
                 logger.warning(f"{self.name}: No shots found for project {project_id}")
                 self._update_option_choices("selected_shot", ["No shots available"], "No shots available")
                 return
 
             shot_list, choices_names = self._process_shots_to_choices(shots)
 
+            storable_list = [{k: v for k, v in s.items() if k not in ("sg_thumbnail", "image")} for s in shot_list]
             GriptapeNodes.handle_request(
-                SetParameterValueRequest(parameter_name="all_shots", value=shot_list, node_name=self.name)
+                SetParameterValueRequest(parameter_name="all_shots", value=storable_list, node_name=self.name)
             )
-            self.parameter_output_values["all_shots"] = shot_list
-            self.publish_update_to_parameter("all_shots", shot_list)
+            self.parameter_output_values["all_shots"] = storable_list
+            self.publish_update_to_parameter("all_shots", storable_list)
 
             selected_value = choices_names[0] if choices_names else "No shots available"
             selected_index = 0
@@ -430,10 +453,11 @@ class FlowListShots(BaseShotGridNode):
             self._update_option_choices("selected_shot", choices_names, selected_value)
             logger.info(f"{self.name}: Dropdown updated, selected_value: {selected_value}")
 
-            self._update_selected_shot_data(shots[selected_index] if selected_index < len(shots) else {})
+            self._update_selected_shot_data(shot_list[selected_index] if selected_index < len(shot_list) else {})
 
-            logger.info(f"{self.name}: Successfully loaded {len(shot_list)} shots")
+            self._set_status_results(was_successful=True, result_details=f"Successfully loaded {len(shot_list)} shots")
 
         except Exception as e:
-            logger.error(f"{self.name}: Failed to load shots: {e}")
+            self._set_status_results(was_successful=False, result_details=str(e))
             self._update_option_choices("selected_shot", ["Error loading shots"], "Error loading shots")
+            self._handle_failure_exception(e)
