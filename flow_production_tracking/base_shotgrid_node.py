@@ -179,6 +179,9 @@ class BaseShotGridNode(SuccessFailureNode):
             else:
                 raise ValueError(f"Unsupported thumbnail_image type: {type(thumbnail_image)}")
 
+            if not thumbnail_url:
+                raise ValueError(f"No URL found in thumbnail_image: {thumbnail_image!r}")
+
             image_bytes = self._download_image_from_url(thumbnail_url)
 
             if hasattr(thumbnail_image, "name") and thumbnail_image.name:
