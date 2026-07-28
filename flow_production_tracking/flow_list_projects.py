@@ -277,13 +277,9 @@ class FlowListProjects(BaseShotGridNode):
                 self._update_project_data(selected_index)
                 if fresh:
                     # Strip URLs from stored version after display update
-                    projects[selected_index] = {
-                        k: v for k, v in fresh.items() if k not in ("sg_thumbnail", "image")
-                    }
+                    projects[selected_index] = {k: v for k, v in fresh.items() if k not in ("sg_thumbnail", "image")}
                     GriptapeNodes.handle_request(
-                        SetParameterValueRequest(
-                            parameter_name="all_projects", value=projects, node_name=self.name
-                        )
+                        SetParameterValueRequest(parameter_name="all_projects", value=projects, node_name=self.name)
                     )
                     self.parameter_output_values["all_projects"] = projects
         return super().after_value_set(parameter, value)
