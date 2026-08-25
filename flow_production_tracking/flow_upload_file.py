@@ -591,6 +591,7 @@ class FlowUploadFile(BaseShotGridNode):
 
             # Step 5 (optional): Upload thumbnail
             if thumbnail_path:
+
                 def _upload_thumbnail() -> None:
                     self.progress_bar_component.increment()
                     self.publish_update_to_parameter("upload_status", "Uploading thumbnail...")
