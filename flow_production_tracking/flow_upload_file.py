@@ -50,6 +50,9 @@ class FlowUploadFile(BaseShotGridNode):
         self._content_type: str = ""
         self._final_filename: str = ""
         self._version_data: dict = {}
+        self._thumbnail_data: bytes = b""
+        self._thumbnail_filename: str = ""
+        self._thumbnail_content_type: str = ""
 
         # Input parameters
         self.add_parameter(
@@ -110,6 +113,23 @@ class FlowUploadFile(BaseShotGridNode):
                 default_value=None,
                 tooltip="Description for the uploaded file (optional).",
                 placeholder_text="Enter file description (optional)",
+            )
+        )
+        self.add_parameter(
+            ParameterString(
+                name="thumbnail_path",
+                default_value=None,
+                tooltip="Path to a thumbnail image for the version (optional).",
+                placeholder_text="Enter thumbnail path (optional)",
+                traits={
+                    FileSystemPicker(
+                        workspace_only=False,
+                        allow_files=True,
+                        allow_directories=False,
+                        allow_create=False,
+                        allow_rename=True,
+                    )
+                },
             )
         )
 
@@ -419,6 +439,43 @@ class FlowUploadFile(BaseShotGridNode):
             logger.error(f"{self.name}: Error uploading file: {e}")
             raise
 
+    def _upload_thumbnail_to_version(self, version_id: int, thumbnail_data: bytes, filename: str) -> None:
+        """Upload a thumbnail image to a version's image field."""
+        access_token = self._get_access_token()
+        base_url = self._get_shotgrid_config()["base_url"]
+        headers = {"Authorization": f"Bearer {access_token}", "Accept": "application/json"}
+
+        with httpx.Client(timeout=httpx.Timeout(30.0, write=300.0)) as client:
+            upload_url = f"{base_url}api/v1/entity/versions/{version_id}/image/_upload?filename={filename}"
+            logger.info(f"{self.name}: Requesting thumbnail upload URL: {upload_url}")
+            upload_response = client.get(upload_url, headers=headers)
+            upload_response.raise_for_status()
+            upload_info = upload_response.json()
+
+            upload_link = upload_info["links"]["upload"]
+            logger.info(f"{self.name}: Uploading thumbnail to S3 ({len(thumbnail_data)} bytes)")
+            client.put(upload_link, content=thumbnail_data).raise_for_status()
+
+            complete_url = f"{base_url}{upload_info['links']['complete_upload']}"
+            complete_data = {
+                "upload_info": {
+                    "timestamp": upload_info["data"].get("timestamp", ""),
+                    "upload_type": upload_info["data"].get("upload_type", ""),
+                    "upload_id": upload_info["data"].get("upload_id"),
+                    "storage_service": upload_info["data"].get("storage_service", "s3"),
+                    "original_filename": upload_info["data"].get("original_filename", filename),
+                    "multipart_upload": upload_info["data"].get("multipart_upload", False),
+                },
+                "links": {
+                    "upload": upload_info["links"]["upload"],
+                    "complete_upload": upload_info["links"]["complete_upload"],
+                },
+                "upload_data": {"display_name": filename},
+            }
+            finalize_headers = {**headers, "Content-Type": "application/json"}
+            client.post(complete_url, headers=finalize_headers, json=complete_data).raise_for_status()
+            logger.info(f"{self.name}: Thumbnail finalized successfully")
+
     def _get_version_upload_field(self, content_type: str, filename: str) -> str:
         """Determine the appropriate upload field for version uploads."""
         # Check file extension first
@@ -449,6 +506,7 @@ class FlowUploadFile(BaseShotGridNode):
             file_path = self.get_parameter_value("file_path")
             file_name = self.get_parameter_value("file_name")
             description = self.get_parameter_value("description")
+            thumbnail_path = self.get_parameter_value("thumbnail_path")
 
             if not entity_id:
                 self._set_status_results(was_successful=False, result_details="Entity ID is required")
@@ -460,8 +518,8 @@ class FlowUploadFile(BaseShotGridNode):
                 logger.error(f"{self.name}: File path is required")
                 return
 
-            # Initialize progress bar (5 steps: validate, detect, read, upload, complete)
-            self.progress_bar_component.initialize(total_steps=5)
+            # Initialize progress bar (5 steps base + 1 if thumbnail provided)
+            self.progress_bar_component.initialize(total_steps=6 if thumbnail_path else 5)
 
             # Step 1: Auto-detect entity type if "Unknown" is selected
             def _validate_and_detect() -> None:
@@ -531,7 +589,22 @@ class FlowUploadFile(BaseShotGridNode):
 
             yield _upload_file
 
-            # Step 5: Complete and finalize
+            # Step 5 (optional): Upload thumbnail
+            if thumbnail_path:
+                def _upload_thumbnail() -> None:
+                    self.progress_bar_component.increment()
+                    self.publish_update_to_parameter("upload_status", "Uploading thumbnail...")
+
+                    thumb_data, thumb_filename, _ = self._get_file_data(thumbnail_path)
+                    self._thumbnail_data = thumb_data
+                    self._thumbnail_filename = thumb_filename
+
+                    version_id = self._version_data.get("version_id")
+                    self._upload_thumbnail_to_version(version_id, thumb_data, thumb_filename)
+
+                yield _upload_thumbnail
+
+            # Step 5/6: Complete and finalize
             def _finalize() -> None:
                 self.progress_bar_component.increment()
                 self.publish_update_to_parameter("upload_status", "Completing upload...")
