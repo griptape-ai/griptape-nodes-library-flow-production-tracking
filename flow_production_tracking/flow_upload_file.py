@@ -297,7 +297,7 @@ class FlowUploadFile(BaseShotGridNode):
             base_url = self._get_shotgrid_config()["base_url"]
             headers = {"Authorization": f"Bearer {access_token}", "Accept": "application/json"}
 
-            with httpx.Client() as client:
+            with httpx.Client(timeout=httpx.Timeout(30.0, write=300.0)) as client:
                 # Step 1: Create a Version entity for all entity types (including Tasks)
                 project_id = self.get_parameter_value("project_id")
                 if not project_id:
