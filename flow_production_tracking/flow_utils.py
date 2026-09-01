@@ -463,6 +463,65 @@ class ShotGridAPI:
             logger.error(f"Failed to create task: {e}")
             return None
 
+    def create_entity(self, entity_type_api: str, entity_data: dict) -> dict | None:
+        """Create a new entity of any (API-formatted) type, e.g. 'assets' or 'custom_entity_01'."""
+        try:
+            url = f"{self.base_url}api/v1/entity/{entity_type_api}"
+            headers = {**self.headers, "Content-Type": "application/json"}
+
+            with httpx.Client() as client:
+                response = client.post(url, headers=headers, json=entity_data)
+                response.raise_for_status()
+
+                data = response.json()
+                return data.get("data", {})
+
+        except httpx.HTTPStatusError as e:
+            # Surface ShotGrid's actual error detail (e.g. invalid/missing field) instead of just the status line.
+            detail = f"{e.response.status_code} - {e.response.text}"
+            logger.error(f"Failed to create {entity_type_api}: {detail}")
+            msg = f"ShotGrid rejected create for '{entity_type_api}': {detail}"
+            raise RuntimeError(msg) from e
+
+    def get_field_schema(self, *entity_type_candidates: str) -> dict:
+        """Read the field schema for an entity type, keyed by field code.
+
+        The schema endpoint's entity-name form varies by instance (PascalCase vs. plural
+        snake_case), so pass candidates in priority order; the first that resolves wins.
+        Best-effort: returns {} if none resolve.
+        """
+        for name in entity_type_candidates:
+            if not name:
+                continue
+            try:
+                url = f"{self.base_url}api/v1/schema/{name}/fields"
+                with httpx.Client() as client:
+                    response = client.get(url, headers=self.headers)
+                    response.raise_for_status()
+                    fields = response.json().get("data", {})
+                    if fields:
+                        return fields
+            except Exception as e:
+                logger.info(f"Field schema lookup failed for '{name}': {e}")
+        return {}
+
+    def create_note(self, note_data: dict) -> dict | None:
+        """Create a new note"""
+        try:
+            url = f"{self.base_url}api/v1/entity/notes"
+            headers = {**self.headers, "Content-Type": "application/json"}
+
+            with httpx.Client() as client:
+                response = client.post(url, headers=headers, json=note_data)
+                response.raise_for_status()
+
+                data = response.json()
+                return data.get("data", {})
+
+        except Exception as e:
+            logger.error(f"Failed to create note: {e}")
+            return None
+
     def get_entity_data(self, entity_type: str, entity_id: int, fields: str = "*") -> dict | None:
         """Get data for a specific entity"""
         try:
