@@ -379,13 +379,13 @@ name = "flow-production-tracking"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "griptape-nodes-engine" },
     { name = "httpx" },
     { name = "pillow" },
 ]
 
 [package.dev-dependencies]
 dev = [
+    { name = "griptape-nodes-engine" },
     { name = "mdformat" },
     { name = "pyright" },
     { name = "pytest" },
@@ -399,13 +399,13 @@ test = [
 
 [package.metadata]
 requires-dist = [
-    { name = "griptape-nodes-engine", git = "https://github.com/griptape-ai/griptape-nodes-engine?rev=latest" },
     { name = "httpx" },
     { name = "pillow" },
 ]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "griptape-nodes-engine", git = "https://github.com/griptape-ai/griptape-nodes-engine?rev=latest" },
     { name = "mdformat", specifier = ">=0.7.22" },
     { name = "pyright", specifier = ">=1.1.396" },
     { name = "pytest" },

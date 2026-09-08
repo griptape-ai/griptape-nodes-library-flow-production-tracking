@@ -8,7 +8,6 @@ authors = [
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
-    "griptape-nodes-engine>=0.93.0",
     "httpx",
     "Pillow",
 ]
@@ -24,7 +23,7 @@ build-backend = "hatchling.build"
 packages = ["flow_production_tracking"]
 
 [dependency-groups]
-dev = ["pyright>=1.1.396", "pytest-asyncio>=0.21.0", "ruff>=0.8.0", "pytest", "mdformat>=0.7.22", "typos>=1.30.2"]
+dev = ["pyright>=1.1.396", "pytest-asyncio>=0.21.0", "ruff>=0.8.0", "pytest", "mdformat>=0.7.22", "typos>=1.30.2", "griptape-nodes-engine>=0.93.0"]
 test = ["pytest>=8.3.5"]
 
 [tool.ruff]
