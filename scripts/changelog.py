@@ -3,7 +3,7 @@
 Usage:
     python scripts/changelog.py [--path CHANGELOG.md] [--fragments changelog.d] COMMAND
 
-    check
+    check [--version VERSION]
     render
     roll VERSION [--date YYYY-MM-DD] [--allow-empty]
     extract VERSION
@@ -14,8 +14,9 @@ Unreleased entries live one per file in `changelog.d/`, so two pull requests add
 touch the same line of the same file. `render` shows what they add up to. `roll` folds them into a
 dated version section at release time and deletes them.
 
-`check` validates structure only. Whether a change needs an entry, and whether an entry is worth
-reading, stays a human call. `extract` prints one version's section.
+`check` validates structure, and with `--version` that the newest section is that version, so a
+version bumped without a roll fails CI instead of filing its entries under a later one. Whether a
+change needs an entry, and whether an entry is worth reading, stays a human call. `extract` prints one version's section.
 
 Standard library only, so CI can run it without installing the project.
 """
@@ -285,6 +286,24 @@ def check_unreleased_is_empty(source: str) -> list[Problem]:
     return problems
 
 
+def check_version(source: str, version: str) -> list[Problem]:
+    """Report a newest version section that is not `version`, the version the library ships as.
+
+    A bump that skipped the roll leaves the entry files unreleased, and the next roll would file them
+    under a version they never shipped in.
+    """
+    lines = _Lines(source)
+    for index, line in enumerate(lines.lines):
+        heading = VERSION_HEADING.match(line)
+        if heading and not lines.fenced[index]:
+            if heading.group(1) == version:
+                return []
+            return [
+                Problem(line=index + 1, message=f"newest version is {heading.group(1)}, but the library is {version}")
+            ]
+    return [Problem(line=1, message=f"no version section, but the library is {version}")]
+
+
 def check_fragments(directory: Path) -> list[Problem]:
     """Report problems in every entry file in `directory`. Returns an empty list when all are valid."""
     if not directory.is_dir():
@@ -433,7 +452,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     if args.command == "check":
-        return _run_check(path, source, args.fragments)
+        return _run_check(path, source, args.fragments, args.version)
     if args.command == "render":
         return _run_render(source, args.fragments)
     if args.command == "roll":
@@ -441,7 +460,7 @@ def main(argv: list[str] | None = None) -> int:
     return _run_extract(source, args.version)
 
 
-def _run_check(path: Path, source: str, directory: Path) -> int:
+def _run_check(path: Path, source: str, directory: Path, version: str | None) -> int:
     unreleased = check_unreleased_is_empty(source)
     problems = check(source) + unreleased + check_fragments(directory)
     if problems:
@@ -453,6 +472,17 @@ def _run_check(path: Path, source: str, directory: Path) -> int:
         reference = f"{directory}/{FRAGMENT_DOC}" if in_readme else SPEC_URL
         sys.stderr.write(f"{len(problems)} problem(s) found. See {reference}\n")
         return 1
+
+    if version is not None:
+        mismatch = check_version(source, version)
+        if mismatch:
+            for problem in mismatch:
+                sys.stderr.write(f"{path}:{problem.line}: {problem.message}\n")
+            sys.stderr.write(
+                f"library_version changed without rolling {directory} into {path}. Roll it into {version} with:\n"
+                f"  make version/set v={version}\n"
+            )
+            return 1
 
     # Check the document the release will publish, not just the parts above. An entry file can be
     # well formed on its own and still fold into a changelog that does not parse, and a release is
@@ -549,7 +579,8 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     )
     commands = parser.add_subparsers(dest="command", required=True)
 
-    commands.add_parser("check", help="validate the file's structure and every entry file")
+    check_parser = commands.add_parser("check", help="validate the file's structure and every entry file")
+    check_parser.add_argument("--version", help="fail unless the newest version section is this one")
     commands.add_parser("render", help="print the [Unreleased] section as the next release will show it")
 
     roll_parser = commands.add_parser("roll", help="rename [Unreleased] to a dated version")

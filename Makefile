@@ -138,8 +138,8 @@ check/spell:
 	@uv run typos
 
 .PHONY: check/changelog
-check/changelog: ## Check CHANGELOG.md and the changelog.d entries follow Keep a Changelog.
-	@uv run --no-project python scripts/changelog.py check
+check/changelog: ## Check CHANGELOG.md and the changelog.d entries follow Keep a Changelog, and the newest section is library_version.
+	@uv run --no-project python scripts/changelog.py check --version $$($(MAKE) --no-print-directory version/get)
 
 .PHONY: changelog
 changelog: ## Print [Unreleased] as the next version will show it, changelog.d entries folded in.

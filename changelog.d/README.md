@@ -34,6 +34,8 @@ The file holds the bullet exactly as it should read in `CHANGELOG.md`, and nothi
 - no headings, since the type is in the filename
 - `## [Unreleased]` in `CHANGELOG.md` carries no entries of its own; they all live here
 - these files fold into a `CHANGELOG.md` that still parses
+- the newest version in `CHANGELOG.md` is `library_version`, so a bump made by editing the
+  library JSON fails until `make version/set v=<library_version>` rolls these files into it
 
 Wrap at about 100 characters. Nothing checks that, and nothing reformats it either.
 

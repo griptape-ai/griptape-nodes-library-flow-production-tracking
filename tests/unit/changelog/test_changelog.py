@@ -9,6 +9,7 @@ from scripts.changelog import (
     check,
     check_fragments,
     check_unreleased_is_empty,
+    check_version,
     extract,
     fold,
     load_fragments,
@@ -161,6 +162,32 @@ class TestCheckUnreleasedIsEmpty:
         source = EMPTY_UNRELEASED.replace("## [Unreleased]\n\n", "")
 
         assert check_unreleased_is_empty(source) == []
+
+
+class TestCheckVersion:
+    def test_accepts_the_newest_version(self) -> None:
+        assert check_version(EMPTY_UNRELEASED, "0.101.0") == []
+
+    def test_rejects_a_version_bumped_without_a_roll(self) -> None:
+        problems = check_version(EMPTY_UNRELEASED, "0.102.0")
+
+        assert [(problem.line, problem.message) for problem in problems] == [
+            (7, "newest version is 0.101.0, but the library is 0.102.0")
+        ]
+
+    def test_rejects_a_changelog_with_no_version(self) -> None:
+        source = f"{PREAMBLE}\n## [Unreleased]\n\n[Unreleased]: {REPO}/compare/v0.101.0...HEAD\n"
+
+        assert [problem.message for problem in check_version(source, "0.101.0")] == [
+            "no version section, but the library is 0.101.0"
+        ]
+
+    def test_ignores_a_heading_inside_a_code_fence(self) -> None:
+        source = EMPTY_UNRELEASED.replace(
+            "## [Unreleased]\n", "## [Unreleased]\n\n```md\n## [0.102.0] - 2026-09-22\n```\n"
+        )
+
+        assert check_version(source, "0.101.0") == []
 
 
 class TestCheckFragments:
@@ -523,6 +550,17 @@ class TestMain:
         path.write_text(CHANGELOG, encoding="utf-8")
 
         assert main(self._argv(path, _entries(tmp_path, {}), "check")) == 1
+
+    def test_check_fails_on_a_version_bumped_without_a_roll(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        path = tmp_path / "CHANGELOG.md"
+        path.write_text(EMPTY_UNRELEASED, encoding="utf-8")
+        directory = _entries(tmp_path, {})
+
+        assert main(self._argv(path, directory, "check", "--version", "0.101.0")) == 0
+        assert main(self._argv(path, directory, "check", "--version", "0.102.0")) == 1
+        assert "make version/set v=0.102.0" in capsys.readouterr().err
 
     def test_check_fails_on_a_bad_entry_file(self, tmp_path: Path) -> None:
         path = tmp_path / "CHANGELOG.md"

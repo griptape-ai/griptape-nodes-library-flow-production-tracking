@@ -64,7 +64,7 @@ A PR with a user-facing change does not edit `CHANGELOG.md`. It adds one file to
 
 Write for the person updating the library: which node changed, what they will notice, and why. Link the GitHub issue on the entry's last line when there is one. Start breaking changes, anything that makes a saved workflow stop working or give a different result, with `**Breaking:**`. Refactors, tests, CI, and docs-only changes get no entry. The full style guide is in [CLAUDE.md](CLAUDE.md#changelog).
 
-`make check/changelog`, part of `make check` and CI, validates the structure of `CHANGELOG.md` and of every entry file. It never requires a PR to add an entry. That call stays with people.
+`make check/changelog`, part of `make check` and CI, validates the structure of `CHANGELOG.md` and of every entry file, and fails when `library_version` is not the newest section in `CHANGELOG.md`. That catches a version bumped by editing the library JSON, which skips the roll; `make version/set v=<library_version>` rolls it. The check never requires a PR to add an entry. That call stays with people.
 
 ## Releases
 
