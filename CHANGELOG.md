@@ -10,4 +10,4 @@ the `library_version` in `flow_production_tracking/griptape_nodes_library.json`.
 
 <!-- Entries go in changelog.d/, one file each. See changelog.d/README.md. -->
 
-[Unreleased]: https://github.com/griptape-ai/griptape-nodes-library-flow-production-tracking/compare/v0.1.8...HEAD
+[Unreleased]: https://github.com/griptape-ai/griptape-nodes-library-flow-production-tracking/compare/3ab5c2f16065ab662ba89e35d2180c4f0bc1992b...HEAD
