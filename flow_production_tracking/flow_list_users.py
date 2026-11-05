@@ -411,6 +411,5 @@ class FlowListUsers(BaseShotGridNode):
             self._set_status_results(was_successful=True, result_details=f"Successfully loaded {len(user_list)} users")
 
         except Exception as e:
-            self._set_status_results(was_successful=False, result_details=str(e))
             self._update_option_choices("selected_user", ["Error loading users"], "Error loading users")
-            self._handle_failure_exception(e)
+            self._fail(e)

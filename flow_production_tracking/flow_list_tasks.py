@@ -2,6 +2,7 @@ from typing import Any
 
 import httpx
 from base_shotgrid_node import BaseShotGridNode
+from flow_node_errors import integer_input_error, required_input_error
 from griptape_nodes.exe_types.core_types import (
     Parameter,
     ParameterMode,
@@ -34,9 +35,6 @@ ENTITY_TYPES = [
 class FlowListTasks(BaseShotGridNode):
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
-        # Get the user's ShotGrid URL for the link
-        self.base_url = self._get_shotgrid_config()["base_url"]
-
         self.add_parameter(
             ParameterString(
                 name="entity_id",
@@ -570,25 +568,19 @@ class FlowListTasks(BaseShotGridNode):
             entity_type = self.get_parameter_value("entity_type")
 
             if not entity_id:
-                self._set_status_results(was_successful=False, result_details="entity_id is required")
-                logger.warning(f"{self.name}: entity_id is required")
                 self._update_option_choices("selected_task", ["No entity selected"], "No entity selected")
-                return
+                raise required_input_error("entity_id")
 
             if not entity_type:
-                self._set_status_results(was_successful=False, result_details="entity_type is required")
-                logger.warning(f"{self.name}: entity_type is required")
                 self._update_option_choices("selected_task", ["No entity type selected"], "No entity type selected")
-                return
+                raise required_input_error("entity_type")
 
             # Convert entity_id to integer
             try:
                 entity_id = int(entity_id)
-            except (ValueError, TypeError):
-                self._set_status_results(was_successful=False, result_details="entity_id must be a valid integer")
-                logger.error(f"{self.name}: entity_id must be a valid integer")
+            except (ValueError, TypeError) as e:
                 self._update_option_choices("selected_task", ["Invalid entity ID"], "Invalid entity ID")
-                return
+                raise integer_input_error("entity_id", entity_id) from e
 
             # Load tasks from ShotGrid
             logger.info(f"{self.name}: Loading tasks from ShotGrid for {entity_type} {entity_id}...")
@@ -645,6 +637,5 @@ class FlowListTasks(BaseShotGridNode):
             self._set_status_results(was_successful=True, result_details=f"Successfully loaded {len(task_list)} tasks")
 
         except Exception as e:
-            self._set_status_results(was_successful=False, result_details=str(e))
             self._update_option_choices("selected_task", ["Error loading tasks"], "Error loading tasks")
-            self._handle_failure_exception(e)
+            self._fail(e)

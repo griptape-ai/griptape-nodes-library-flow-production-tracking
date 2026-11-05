@@ -67,5 +67,4 @@ class FlowGetSchemas(BaseShotGridNode):
                 self._set_status_results(was_successful=True, result_details="Retrieved schema data")
 
         except Exception as e:
-            self._set_status_results(was_successful=False, result_details=str(e))
-            self._handle_failure_exception(e)
+            self._fail(e)

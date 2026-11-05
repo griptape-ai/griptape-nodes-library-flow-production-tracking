@@ -3,7 +3,14 @@ import urllib.parse
 from pathlib import Path
 
 import httpx
+from flow_node_errors import (
+    error_from_auth_failure,
+    missing_api_key_error,
+    missing_url_error,
+    to_node_error,
+)
 from griptape_nodes.common.project_templates.situation import BuiltInSituation
+from griptape_nodes.exe_types.core_types import NodeError
 from griptape_nodes.exe_types.node_types import SuccessFailureNode
 from griptape_nodes.files.file import File
 from griptape_nodes.files.project_file import ProjectFileDestination
@@ -27,6 +34,32 @@ class BaseShotGridNode(SuccessFailureNode):
     SHOTGRID_URL_ENV_VAR = "SHOTGRID_URL"
     SCRIPT_NAME_ENV_VAR = "SHOTGRID_SCRIPT_NAME"
 
+    # Nodes that never call Autodesk Flow set this to False so a missing key does not block them.
+    REQUIRES_CREDENTIALS = True
+
+    def validate_before_node_run(self) -> list[Exception] | None:
+        """Report missing credentials first and on their own, since nothing else can work without them."""
+        if self.REQUIRES_CREDENTIALS:
+            credential_errors = self._missing_credential_errors()
+            if credential_errors:
+                return credential_errors
+        return super().validate_before_node_run()
+
+    def _missing_credential_errors(self) -> list[Exception]:
+        secrets = GriptapeNodes.SecretsManager()
+        errors: list[Exception] = []
+        if not secrets.get_secret(self.API_KEY_ENV_VAR, should_error_on_not_found=False):
+            errors.append(missing_api_key_error())
+        if not secrets.get_secret(self.SHOTGRID_URL_ENV_VAR, should_error_on_not_found=False):
+            errors.append(missing_url_error())
+        return errors
+
+    def _fail(self, exc: Exception) -> None:
+        """Record a failure on the status outputs, then follow Failed if wired or raise."""
+        error = to_node_error(exc)
+        self._set_status_results(was_successful=False, result_details=str(error))
+        self._handle_failure_exception(error)
+
     def _get_access_token(self) -> str:
         """Get or refresh the access token using API key authentication."""
         # Check if we have a valid cached token
@@ -44,8 +77,7 @@ class BaseShotGridNode(SuccessFailureNode):
         base_url = config["base_url"]
 
         if not api_key:
-            error_msg = "No API key available. Please configure SHOTGRID_API_KEY in settings."
-            raise ValueError(error_msg)
+            raise missing_api_key_error()
 
         # Get script name from config
         script_name = GriptapeNodes.SecretsManager().get_secret(self.SCRIPT_NAME_ENV_VAR) or "Griptape Nodes"
@@ -68,8 +100,8 @@ class BaseShotGridNode(SuccessFailureNode):
             expires_in = token_data.get("expires_in", 3600)  # Default to 1 hour
 
             if not access_token:
-                error_msg = "Failed to get access token from ShotGrid"
-                raise ValueError(error_msg)
+                msg = "Autodesk Flow answered the sign-in request without an access token. Run the node again."
+                raise NodeError(msg, response=token_data if isinstance(token_data, dict) else None)
 
             # Cache the token
             self._access_token = access_token
@@ -77,6 +109,11 @@ class BaseShotGridNode(SuccessFailureNode):
 
             return access_token
 
+        except httpx.HTTPStatusError as e:
+            logger.error(f"Failed to get access token: {e}")
+            if e.response.status_code in (400, 401, 403):
+                raise error_from_auth_failure(e) from e
+            raise to_node_error(e) from e
         except Exception as e:
             logger.error(f"Failed to get access token: {e}")
             raise
@@ -180,7 +217,8 @@ class BaseShotGridNode(SuccessFailureNode):
                 raise ValueError(f"Unsupported thumbnail_image type: {type(thumbnail_image)}")
 
             if not thumbnail_url:
-                raise ValueError(f"No URL found in thumbnail_image: {thumbnail_image!r}")
+                msg = "The thumbnail image has no URL or path. Reconnect it to 'Thumbnail Image'."
+                raise NodeError(msg, fields={"parameter": "thumbnail_image"})
 
             image_bytes = self._download_image_from_url(thumbnail_url)
 
@@ -215,7 +253,8 @@ class BaseShotGridNode(SuccessFailureNode):
                 logger.error(f"{self.name}: Available keys in response: {list(upload_response.keys())}")
                 if "links" in upload_response:
                     logger.error(f"{self.name}: Available links: {list(upload_response['links'].keys())}")
-                raise Exception("Failed to get upload URL from ShotGrid")
+                msg = "Autodesk Flow did not return a place to upload the thumbnail. Run the node again."
+                raise NodeError(msg, response=upload_response if isinstance(upload_response, dict) else None)
 
             self._upload_file_to_url(upload_url, image_bytes, mime_type)
 
@@ -312,9 +351,12 @@ class BaseShotGridNode(SuccessFailureNode):
 
     def _get_shotgrid_config(self) -> dict:
         """Get ShotGrid configuration values."""
-        api_key = GriptapeNodes.SecretsManager().get_secret(self.API_KEY_ENV_VAR)
-        base_url = GriptapeNodes.SecretsManager().get_secret(self.SHOTGRID_URL_ENV_VAR)
+        api_key = GriptapeNodes.SecretsManager().get_secret(self.API_KEY_ENV_VAR, should_error_on_not_found=False)
+        base_url = GriptapeNodes.SecretsManager().get_secret(self.SHOTGRID_URL_ENV_VAR, should_error_on_not_found=False)
         script_name = GriptapeNodes.SecretsManager().get_secret(self.SCRIPT_NAME_ENV_VAR) or "Griptape Nodes"
+
+        if not base_url:
+            raise missing_url_error()
 
         if not base_url.endswith("/"):
             base_url += "/"

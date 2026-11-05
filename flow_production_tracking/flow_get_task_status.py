@@ -2,7 +2,9 @@ from typing import Any
 
 import httpx
 from base_shotgrid_node import BaseShotGridNode
+from flow_node_errors import integer_input_error, required_input_error
 from griptape_nodes.exe_types.core_types import (
+    NodeError,
     Parameter,
     ParameterMode,
 )
@@ -180,19 +182,15 @@ class FlowGetTaskStatus(BaseShotGridNode):
             task_id = self.get_parameter_value("task_id")
 
             if not task_id:
-                self._set_status_results(was_successful=False, result_details="task_id is required")
-                logger.error(f"{self.name}: task_id is required")
                 self._clear_all_outputs()
-                return
+                raise required_input_error("task_id")
 
             # Convert task_id to integer
             try:
                 task_id = int(task_id)
-            except (ValueError, TypeError):
-                self._set_status_results(was_successful=False, result_details="task_id must be a valid integer")
-                logger.error(f"{self.name}: task_id must be a valid integer")
+            except (ValueError, TypeError) as e:
                 self._clear_all_outputs()
-                return
+                raise integer_input_error("task_id", task_id) from e
 
             # Get access token and base URL
             access_token = self._get_access_token()
@@ -201,13 +199,11 @@ class FlowGetTaskStatus(BaseShotGridNode):
             # Fetch task data
             task_data = self._fetch_task_data(task_id, access_token, base_url)
             if not task_data:
-                self._set_status_results(
-                    was_successful=False,
-                    result_details=f"Could not retrieve task data for task {task_id}",
-                )
-                logger.error(f"{self.name}: Could not retrieve task data for task {task_id}")
                 self._clear_all_outputs()
-                return
+                raise NodeError(
+                    f"Autodesk Flow returned no data for task {task_id}. Check the task ID.",
+                    fields={"parameter": "task_id"},
+                )
 
             # Extract and populate all task information
             self._populate_task_information(task_data)
@@ -218,9 +214,8 @@ class FlowGetTaskStatus(BaseShotGridNode):
             )
 
         except Exception as e:
-            self._set_status_results(was_successful=False, result_details=str(e))
             self._clear_all_outputs()
-            self._handle_failure_exception(e)
+            self._fail(e)
 
     def _fetch_task_data(self, task_id: int, access_token: str, base_url: str) -> dict | None:
         """Fetch task data from ShotGrid API."""

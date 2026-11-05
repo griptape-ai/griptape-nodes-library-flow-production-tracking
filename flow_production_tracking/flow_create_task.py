@@ -1,8 +1,9 @@
 from typing import Any
 
 from base_shotgrid_node import BaseShotGridNode
+from flow_node_errors import required_input_error
 from flow_utils import create_shotgrid_api
-from griptape_nodes.exe_types.core_types import Parameter, ParameterGroup, ParameterMessage, ParameterMode
+from griptape_nodes.exe_types.core_types import NodeError, Parameter, ParameterGroup, ParameterMessage, ParameterMode
 from griptape_nodes.exe_types.node_types import AsyncResult
 from griptape_nodes.retained_mode.griptape_nodes import logger
 from griptape_nodes.traits.options import Options
@@ -254,30 +255,21 @@ class FlowCreateTask(BaseShotGridNode):
             task_status = self.get_parameter_value("task_status")
 
             if not project_id:
-                self._set_status_results(was_successful=False, result_details="project_id is required")
-                logger.error(f"{self.name}: project_id is required")
-                return
+                raise required_input_error("project_id")
 
             if not entity_id:
-                self._set_status_results(was_successful=False, result_details="entity_id is required")
-                logger.error(f"{self.name}: entity_id is required")
-                return
+                raise required_input_error("entity_id")
 
             if not task_content:
-                self._set_status_results(was_successful=False, result_details="task_content is required")
-                logger.error(f"{self.name}: task_content is required")
-                return
+                raise required_input_error("task_content")
 
             # Convert IDs to integers
             try:
                 project_id = int(project_id)
                 entity_id = int(entity_id)
-            except (ValueError, TypeError):
-                self._set_status_results(
-                    was_successful=False, result_details="project_id and entity_id must be valid integers"
-                )
-                logger.error(f"{self.name}: project_id and entity_id must be valid integers")
-                return
+            except (ValueError, TypeError) as e:
+                msg = "'Project ID' and 'Entity ID' must be whole numbers such as 123."
+                raise NodeError(msg) from e
 
             # Get access token and base URL
             access_token = self._get_access_token()
@@ -371,9 +363,11 @@ class FlowCreateTask(BaseShotGridNode):
 
                 self._set_status_results(was_successful=True, result_details=f"Successfully created task {task_id}")
             else:
-                self._set_status_results(was_successful=False, result_details="Failed to create task")
-                logger.error(f"{self.name}: Failed to create task")
+                msg = (
+                    "Autodesk Flow did not create the task. The request was rejected, "
+                    "and its response is in the engine log. Check the Entity, Step and Content values."
+                )
+                raise NodeError(msg)
 
         except Exception as e:
-            self._set_status_results(was_successful=False, result_details=str(e))
-            self._handle_failure_exception(e)
+            self._fail(e)

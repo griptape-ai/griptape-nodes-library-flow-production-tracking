@@ -1,5 +1,6 @@
 import httpx
 from base_shotgrid_node import BaseShotGridNode
+from flow_node_errors import integer_input_error, required_input_error
 from griptape_nodes.exe_types.core_types import ParameterMode
 from griptape_nodes.exe_types.node_types import AsyncResult
 from griptape_nodes.exe_types.param_types.parameter_json import ParameterJson
@@ -48,17 +49,13 @@ class FlowGetProject(BaseShotGridNode):
             project_id = self.get_parameter_value("project_id")
 
             if not project_id:
-                self._set_status_results(was_successful=False, result_details="project_id is required")
-                logger.error(f"{self.name}: project_id is required")
-                return
+                raise required_input_error("project_id")
 
             # Convert project_id to integer if it's a string
             try:
                 project_id = int(project_id)
-            except (ValueError, TypeError):
-                self._set_status_results(was_successful=False, result_details="project_id must be a valid integer")
-                logger.error(f"{self.name}: project_id must be a valid integer")
-                return
+            except (ValueError, TypeError) as e:
+                raise integer_input_error("project_id", project_id) from e
 
             # Get access token
             access_token = self._get_access_token()
@@ -93,5 +90,4 @@ class FlowGetProject(BaseShotGridNode):
                 self._set_status_results(was_successful=True, result_details=details)
 
         except Exception as e:
-            self._set_status_results(was_successful=False, result_details=str(e))
-            self._handle_failure_exception(e)
+            self._fail(e)

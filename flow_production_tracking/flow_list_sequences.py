@@ -2,6 +2,7 @@ from typing import Any
 
 import httpx
 from base_shotgrid_node import BaseShotGridNode
+from flow_node_errors import integer_input_error, required_input_error
 from griptape_nodes.exe_types.core_types import (
     NodeMessageResult,
     Parameter,
@@ -287,14 +288,12 @@ class FlowListSequences(BaseShotGridNode):
         episode_id = self.get_parameter_value("episode_id")
 
         if not project_id:
-            msg = "project_id is required"
-            raise ValueError(msg)
+            raise required_input_error("project_id")
 
         try:
             project_id = int(project_id)
         except (ValueError, TypeError) as e:
-            msg = "project_id must be a valid integer"
-            raise ValueError(msg) from e
+            raise integer_input_error("project_id", project_id) from e
 
         access_token = self._get_access_token()
         headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
@@ -389,10 +388,8 @@ class FlowListSequences(BaseShotGridNode):
 
             project_id = self.get_parameter_value("project_id")
             if not project_id:
-                self._set_status_results(was_successful=False, result_details="project_id is required")
-                logger.warning(f"{self.name}: project_id is required")
                 self._update_option_choices("selected_sequence", ["No project selected"], "No project selected")
-                return
+                raise required_input_error("project_id")
 
             logger.info(f"{self.name}: Loading sequences from ShotGrid for project {project_id}...")
             sequences = self._fetch_sequences_from_api()
@@ -443,6 +440,5 @@ class FlowListSequences(BaseShotGridNode):
             )
 
         except Exception as e:
-            self._set_status_results(was_successful=False, result_details=str(e))
             self._update_option_choices("selected_sequence", ["Error loading sequences"], "Error loading sequences")
-            self._handle_failure_exception(e)
+            self._fail(e)

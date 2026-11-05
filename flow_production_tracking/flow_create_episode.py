@@ -2,7 +2,8 @@ from typing import Any
 
 import httpx
 from base_shotgrid_node import BaseShotGridNode
-from griptape_nodes.exe_types.core_types import Parameter, ParameterMode
+from flow_node_errors import integer_input_error, required_input_error
+from griptape_nodes.exe_types.core_types import NodeError, Parameter, ParameterMode
 from griptape_nodes.exe_types.node_types import AsyncResult
 from griptape_nodes.exe_types.param_types.parameter_string import ParameterString
 from griptape_nodes.retained_mode.griptape_nodes import logger
@@ -119,21 +120,15 @@ class FlowCreateEpisode(BaseShotGridNode):
             thumbnail_image = self.get_parameter_value("thumbnail_image")
 
             if not project_id:
-                self._set_status_results(was_successful=False, result_details="project_id is required")
-                logger.error(f"{self.name}: project_id is required")
-                return
+                raise required_input_error("project_id")
 
             if not episode_code:
-                self._set_status_results(was_successful=False, result_details="episode_code is required")
-                logger.error(f"{self.name}: episode_code is required")
-                return
+                raise required_input_error("episode_code")
 
             try:
                 project_id = int(project_id)
-            except (ValueError, TypeError):
-                self._set_status_results(was_successful=False, result_details="project_id must be a valid integer")
-                logger.error(f"{self.name}: project_id must be a valid integer")
-                return
+            except (ValueError, TypeError) as e:
+                raise integer_input_error("project_id", project_id) from e
 
             # Get access token - try password auth first for better permissions
             try:
@@ -173,11 +168,9 @@ class FlowCreateEpisode(BaseShotGridNode):
                 episode_id = created_episode.get("id")
 
                 if not episode_id:
-                    self._set_status_results(
-                        was_successful=False, result_details="No episode ID returned from creation"
+                    raise NodeError(
+                        "Autodesk Flow did not return an ID for the new episode. Check Flow for the episode before running the node again, so it is not created twice."
                     )
-                    logger.error(f"{self.name}: No episode ID returned from creation")
-                    return
 
                 logger.info(f"{self.name}: Episode created successfully with ID: {episode_id}")
 
@@ -224,5 +217,4 @@ class FlowCreateEpisode(BaseShotGridNode):
                 )
 
         except Exception as e:
-            self._set_status_results(was_successful=False, result_details=str(e))
-            self._handle_failure_exception(e)
+            self._fail(e)

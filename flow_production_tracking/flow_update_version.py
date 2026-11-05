@@ -2,7 +2,8 @@ from typing import Any
 
 import httpx
 from base_shotgrid_node import BaseShotGridNode
-from griptape_nodes.exe_types.core_types import Parameter, ParameterMode
+from flow_node_errors import integer_input_error, required_input_error
+from griptape_nodes.exe_types.core_types import NodeError, Parameter, ParameterMode
 from griptape_nodes.exe_types.node_types import AsyncResult
 from griptape_nodes.retained_mode.griptape_nodes import logger
 
@@ -109,16 +110,12 @@ class FlowUpdateVersion(BaseShotGridNode):
             thumbnail_image = self.get_parameter_value("thumbnail_image")
 
             if not version_id:
-                self._set_status_results(was_successful=False, result_details="version_id is required")
-                logger.error(f"{self.name}: version_id is required")
-                return
+                raise required_input_error("version_id")
 
             try:
                 version_id = int(version_id)
-            except (ValueError, TypeError):
-                self._set_status_results(was_successful=False, result_details="version_id must be a valid integer")
-                logger.error(f"{self.name}: version_id must be a valid integer")
-                return
+            except (ValueError, TypeError) as e:
+                raise integer_input_error("version_id", version_id) from e
 
             access_token = self._get_access_token()
             base_url = self._get_shotgrid_config()["base_url"]
@@ -180,12 +177,7 @@ class FlowUpdateVersion(BaseShotGridNode):
 
             # Check if we have any updates (fields or thumbnail)
             if not has_updates and not thumbnail_image:
-                self._set_status_results(
-                    was_successful=False,
-                    result_details="At least one field to update or thumbnail must be provided",
-                )
-                logger.error(f"{self.name}: At least one field to update or thumbnail must be provided")
-                return
+                raise NodeError("There is nothing to update. Fill in at least one field or connect a thumbnail.")
 
             # Get final version data
             try:
@@ -215,5 +207,4 @@ class FlowUpdateVersion(BaseShotGridNode):
             self._update_version_url(version_id)
 
         except Exception as e:
-            self._set_status_results(was_successful=False, result_details=str(e))
-            self._handle_failure_exception(e)
+            self._fail(e)

@@ -2,7 +2,8 @@ from typing import Any
 
 import httpx
 from base_shotgrid_node import BaseShotGridNode
-from griptape_nodes.exe_types.core_types import Parameter, ParameterMode
+from flow_node_errors import required_input_error
+from griptape_nodes.exe_types.core_types import NodeError, Parameter, ParameterMode
 from griptape_nodes.exe_types.node_types import AsyncResult
 from griptape_nodes.exe_types.param_types.parameter_string import ParameterString
 from griptape_nodes.retained_mode.events.parameter_events import (
@@ -334,21 +335,17 @@ class FlowGetEntityInfo(BaseShotGridNode):
             fields = self.get_parameter_value("fields")
 
             if not entity_id:
-                self._set_status_results(was_successful=False, result_details="Entity ID is required")
-                logger.error(f"{self.name}: Entity ID is required")
-                return
+                raise required_input_error("entity_id")
 
             # Auto-detect entity type if "Unknown" is selected
             if entity_type == "Unknown":
                 logger.info(f"{self.name}: Entity type is 'Unknown', attempting auto-detection...")
                 entity_type = self._detect_entity_type(entity_id)
                 if not entity_type:
-                    self._set_status_results(
-                        was_successful=False,
-                        result_details=f"Could not auto-detect entity type for ID {entity_id}",
+                    raise NodeError(
+                        f"Could not work out the entity type for ID {entity_id}. Choose a type in 'Entity Type' instead of 'Unknown'.",
+                        fields={"parameter": "entity_type"},
                     )
-                    logger.error(f"{self.name}: Could not auto-detect entity type for ID {entity_id}")
-                    return
 
                 # Update the entity_type parameter with the detected value
                 GriptapeNodes.handle_request(
@@ -413,9 +410,10 @@ class FlowGetEntityInfo(BaseShotGridNode):
                 entity_data = data.get("data", {})
 
                 if not entity_data:
-                    self._set_status_results(was_successful=False, result_details="No entity data returned")
-                    logger.error(f"{self.name}: No entity data returned")
-                    return
+                    raise NodeError(
+                        f"Autodesk Flow returned no data for {entity_type} {entity_id}. Check the entity ID and type.",
+                        fields={"parameter": "entity_id"},
+                    )
 
                 # Extract and process entity data
                 processed_data = self._extract_entity_info(entity_data)
@@ -431,5 +429,4 @@ class FlowGetEntityInfo(BaseShotGridNode):
                 )
 
         except Exception as e:
-            self._set_status_results(was_successful=False, result_details=str(e))
-            self._handle_failure_exception(e)
+            self._fail(e)

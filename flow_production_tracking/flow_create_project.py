@@ -1,5 +1,6 @@
 import httpx
 from base_shotgrid_node import BaseShotGridNode
+from flow_node_errors import required_input_error
 from flow_utils import create_shotgrid_api
 from griptape_nodes.exe_types.core_types import Parameter, ParameterGroup, ParameterMessage, ParameterMode
 from griptape_nodes.exe_types.node_types import AsyncResult
@@ -290,9 +291,7 @@ class FlowCreateProject(BaseShotGridNode):
             template_id = self.get_parameter_value("template_id")
 
             if not project_name:
-                self._set_status_results(was_successful=False, result_details="project_name is required")
-                logger.error(f"{self.name}: project_name is required")
-                return
+                raise required_input_error("project_name")
 
             # Auto-generate project code from name if not provided
             if not project_code:
@@ -534,5 +533,4 @@ class FlowCreateProject(BaseShotGridNode):
             self._set_status_results(was_successful=True, result_details=f"Successfully created project {project_id}")
 
         except Exception as e:
-            self._set_status_results(was_successful=False, result_details=str(e))
-            self._handle_failure_exception(e)
+            self._fail(e)
