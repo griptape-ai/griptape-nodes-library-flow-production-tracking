@@ -52,6 +52,7 @@ def test_http_error_carries_reason_status_and_response():
     error = to_node_error(_status_error(404, body, {"x-request-id": "req-1"}))
 
     assert isinstance(error, NodeError)
+    assert "Project 99 does not exist" in str(error)
     assert error.fields["status_code"] == 404
     assert error.fields["request_id"] == "req-1"
     assert error.response == body

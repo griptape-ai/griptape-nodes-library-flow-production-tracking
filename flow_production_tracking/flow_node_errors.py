@@ -14,6 +14,7 @@ SCRIPT_NAME_NAME = "SHOTGRID_SCRIPT_NAME"
 PROVIDER = "Autodesk Flow"
 SCRIPT_DOCS_URL = "https://help.autodesk.com/view/SGDEV/ENU/?guid=SGD_py_python_api_create_manage_html"
 
+HTTP_UNAUTHORIZED = 401
 HTTP_FORBIDDEN = 403
 
 
@@ -41,11 +42,23 @@ def missing_credential_errors(secrets: dict[str, str | None]) -> list[Exception]
     ]
 
 
+def _with_flow_reason(error: NodeError, response: httpx.Response) -> NodeError:
+    """Use the explanation from the REST API's `errors` list, which the engine's reader does not parse."""
+    try:
+        first = response.json()["errors"][0]
+    except (ValueError, KeyError, IndexError, TypeError):
+        return error
+    reason = first.get("detail") or first.get("title") if isinstance(first, dict) else None
+    if isinstance(reason, str) and reason.strip() and response.status_code != HTTP_UNAUTHORIZED:
+        error.args = (f"{PROVIDER} said: {reason.strip()}",)
+    return error
+
+
 def sign_in_error(exc: httpx.HTTPStatusError) -> NodeError:
     """Autodesk Flow refused the script name and API key when asked for an access token."""
     error = NodeError.from_http_response(exc.response, provider=PROVIDER, secret_name=API_KEY_NAME, key_refused=True)
     error.links.append(NodeErrorLink.from_secret(SCRIPT_NAME_NAME, "Update the script name"))
-    return error
+    return _with_flow_reason(error, exc.response)
 
 
 def to_node_error(exc: Exception) -> Exception:
@@ -57,4 +70,4 @@ def to_node_error(exc: Exception) -> Exception:
     key_refused = False if response is not None and response.status_code == HTTP_FORBIDDEN else None
     error = NodeError.from_request_exception(exc, provider=PROVIDER, secret_name=API_KEY_NAME, key_refused=key_refused)
     error.__cause__ = exc
-    return error
+    return _with_flow_reason(error, response) if response is not None else error
