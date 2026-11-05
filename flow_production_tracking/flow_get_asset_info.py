@@ -2,7 +2,8 @@ from typing import Any
 
 import httpx
 from base_shotgrid_node import BaseShotGridNode
-from griptape_nodes.exe_types.core_types import Parameter, ParameterMode
+from flow_node_errors import required_input_error
+from griptape_nodes.exe_types.core_types import NodeError, Parameter, ParameterMode
 from griptape_nodes.exe_types.node_types import AsyncResult
 from griptape_nodes.exe_types.param_types.parameter_string import ParameterString
 from griptape_nodes.retained_mode.events.parameter_events import (
@@ -177,8 +178,7 @@ class FlowGetAssetInfo(BaseShotGridNode):
         asset_id = self.get_parameter_value("asset_id")
 
         if not asset_id:
-            self._set_status_results(was_successful=False, result_details="Asset ID is required")
-            logger.error(f"{self.name}: Asset ID is required")
+            self._fail(required_input_error("asset_id"))
             return
 
         try:
@@ -199,9 +199,10 @@ class FlowGetAssetInfo(BaseShotGridNode):
                 asset_data = data.get("data", {})
 
                 if not asset_data:
-                    self._set_status_results(was_successful=False, result_details="No asset data returned")
-                    logger.error(f"{self.name}: No asset data returned")
-                    return
+                    raise NodeError(
+                        f"Autodesk Flow returned no data for asset {asset_id}. Check the asset ID.",
+                        fields={"parameter": "asset_id"},
+                    )
 
                 # Extract attributes
                 attributes = asset_data.get("attributes", {})
@@ -237,5 +238,4 @@ class FlowGetAssetInfo(BaseShotGridNode):
                 self._set_status_results(was_successful=True, result_details=f"Successfully retrieved asset {asset_id}")
 
         except Exception as e:
-            self._set_status_results(was_successful=False, result_details=str(e))
-            self._handle_failure_exception(e)
+            self._fail(e)

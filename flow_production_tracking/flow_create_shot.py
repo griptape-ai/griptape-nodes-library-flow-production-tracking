@@ -2,7 +2,8 @@ from typing import Any
 
 import httpx
 from base_shotgrid_node import BaseShotGridNode
-from griptape_nodes.exe_types.core_types import Parameter, ParameterMode
+from flow_node_errors import required_input_error
+from griptape_nodes.exe_types.core_types import NodeError, Parameter, ParameterMode
 from griptape_nodes.exe_types.node_types import AsyncResult
 from griptape_nodes.exe_types.param_types.parameter_string import ParameterString
 from griptape_nodes.retained_mode.griptape_nodes import logger
@@ -127,26 +128,17 @@ class FlowCreateShot(BaseShotGridNode):
             thumbnail_image = self.get_parameter_value("thumbnail_image")
 
             if not project_id:
-                self._set_status_results(was_successful=False, result_details="project_id is required")
-                logger.error(f"{self.name}: project_id is required")
-                return
+                raise required_input_error("project_id")
 
             if not shot_code:
-                self._set_status_results(was_successful=False, result_details="shot_code is required")
-                logger.error(f"{self.name}: shot_code is required")
-                return
+                raise required_input_error("shot_code")
 
             try:
                 project_id = int(project_id)
                 if sequence_id:
                     sequence_id = int(sequence_id)
             except (ValueError, TypeError) as e:
-                self._set_status_results(
-                    was_successful=False,
-                    result_details=f"project_id and sequence_id (if provided) must be valid integers: {e}",
-                )
-                logger.error(f"{self.name}: project_id and sequence_id (if provided) must be valid integers: {e}")
-                return
+                raise NodeError("'Project ID' and 'Sequence ID' must be whole numbers such as 123.") from e
 
             try:
                 access_token = self._get_access_token_with_password()
@@ -188,9 +180,9 @@ class FlowCreateShot(BaseShotGridNode):
                 shot_id = created_shot.get("id")
 
                 if not shot_id:
-                    self._set_status_results(was_successful=False, result_details="No shot ID returned from creation")
-                    logger.error(f"{self.name}: No shot ID returned from creation")
-                    return
+                    raise NodeError(
+                        "Autodesk Flow did not return an ID for the new shot. Check Flow for the shot before running the node again, so it is not created twice."
+                    )
 
                 logger.info(f"{self.name}: Shot created successfully with ID: {shot_id}")
 
@@ -231,5 +223,4 @@ class FlowCreateShot(BaseShotGridNode):
                 self._set_status_results(was_successful=True, result_details=f"Successfully created shot {shot_id}")
 
         except Exception as e:
-            self._set_status_results(was_successful=False, result_details=str(e))
-            self._handle_failure_exception(e)
+            self._fail(e)

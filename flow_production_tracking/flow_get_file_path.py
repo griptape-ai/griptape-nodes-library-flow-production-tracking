@@ -1,7 +1,8 @@
 import os
 
 from base_shotgrid_node import BaseShotGridNode
-from griptape_nodes.exe_types.core_types import ParameterMode
+from flow_node_errors import required_input_error
+from griptape_nodes.exe_types.core_types import NodeError, ParameterMode
 from griptape_nodes.exe_types.node_types import AsyncResult
 from griptape_nodes.exe_types.param_types.parameter_string import ParameterString
 from griptape_nodes.files.file import File
@@ -10,6 +11,9 @@ from griptape_nodes.traits.file_system_picker import FileSystemPicker
 
 
 class FlowGetFilePath(BaseShotGridNode):
+    # Resolves a local path or downloads a URL. It never calls Autodesk Flow.
+    REQUIRES_CREDENTIALS = False
+
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
 
@@ -114,8 +118,7 @@ class FlowGetFilePath(BaseShotGridNode):
         file_input = self.get_parameter_value("file_input")
 
         if not file_input:
-            self._set_status_results(was_successful=False, result_details="No file input provided")
-            logger.warning(f"{self.name}: No file input provided")
+            self._fail(required_input_error("file_input", hint="Connect a file or enter a path or URL."))
             return
 
         try:
@@ -128,9 +131,8 @@ class FlowGetFilePath(BaseShotGridNode):
 
             # Validate the file exists
             if not os.path.exists(local_path):
-                self._set_status_results(was_successful=False, result_details=f"File not found: {local_path}")
-                logger.error(f"{self.name}: File not found: {local_path}")
-                return
+                msg = f"No file exists at '{local_path}'. Check the path or URL in 'File Input'."
+                raise NodeError(msg, fields={"parameter": "file_input"})
 
             # Get file info
             filename = os.path.basename(local_path)
@@ -150,5 +152,4 @@ class FlowGetFilePath(BaseShotGridNode):
             )
 
         except Exception as e:
-            self._set_status_results(was_successful=False, result_details=str(e))
-            self._handle_failure_exception(e)
+            self._fail(e)

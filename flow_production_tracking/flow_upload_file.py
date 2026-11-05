@@ -3,7 +3,9 @@ from typing import Any
 
 import httpx
 from base_shotgrid_node import BaseShotGridNode
+from flow_node_errors import required_input_error, to_node_error
 from griptape_nodes.exe_types.core_types import (
+    NodeError,
     Parameter,
     ParameterMode,
 )
@@ -321,7 +323,9 @@ class FlowUploadFile(BaseShotGridNode):
                 # Step 1: Create a Version entity for all entity types (including Tasks)
                 project_id = self.get_parameter_value("project_id")
                 if not project_id:
-                    raise Exception("Project ID is required for version uploads.")
+                    raise required_input_error(
+                        "project_id", hint="Versions are created inside a project, so enter the project ID."
+                    )
 
                 # For tasks, fetch the task to get its parent entity
                 parent_entity = None
@@ -509,14 +513,10 @@ class FlowUploadFile(BaseShotGridNode):
             thumbnail_path = self.get_parameter_value("thumbnail_path")
 
             if not entity_id:
-                self._set_status_results(was_successful=False, result_details="Entity ID is required")
-                logger.error(f"{self.name}: Entity ID is required")
-                return
+                raise required_input_error("entity_id")
 
             if not file_path:
-                self._set_status_results(was_successful=False, result_details="File path is required")
-                logger.error(f"{self.name}: File path is required")
-                return
+                raise required_input_error("file_path")
 
             # Initialize progress bar (5 steps base + 1 if thumbnail provided)
             self.progress_bar_component.initialize(total_steps=6 if thumbnail_path else 5)
@@ -531,7 +531,11 @@ class FlowUploadFile(BaseShotGridNode):
                     logger.info(f"{self.name}: Entity type is 'Unknown', attempting auto-detection...")
                     entity_type = self._detect_entity_type(entity_id)
                     if not entity_type:
-                        raise Exception(f"Could not auto-detect entity type for ID {entity_id}")
+                        raise NodeError(
+                            f"Could not work out the entity type for ID {entity_id}. "
+                            "Choose a type in 'Entity Type' instead of 'Unknown'.",
+                            fields={"parameter": "entity_type"},
+                        )
 
                     # Update the entity_type parameter with the detected value
                     GriptapeNodes.handle_request(
@@ -582,7 +586,7 @@ class FlowUploadFile(BaseShotGridNode):
 
                 # Upload file
                 if entity_type is None:
-                    raise Exception("Entity type is required for upload")
+                    raise required_input_error("entity_type", hint="Choose the type of entity to upload to.")
                 self._version_data = self._upload_file_to_entity(
                     entity_type, entity_id, self._file_data, self._final_filename, self._content_type, description
                 )
@@ -657,11 +661,12 @@ class FlowUploadFile(BaseShotGridNode):
             yield _finalize
 
         except Exception as e:
-            error_msg = str(e)
+            error = to_node_error(e)
+            error_msg = str(error)
             self._set_status_results(was_successful=False, result_details=error_msg)
             GriptapeNodes.handle_request(
                 SetParameterValueRequest(parameter_name="upload_status", value=error_msg, node_name=self.name)
             )
             self.parameter_output_values["upload_status"] = error_msg
             self.publish_update_to_parameter("upload_status", error_msg)
-            self._handle_failure_exception(e)
+            self._handle_failure_exception(error)

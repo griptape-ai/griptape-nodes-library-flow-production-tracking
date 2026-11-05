@@ -3,6 +3,7 @@ from typing import Any
 
 import httpx
 from base_shotgrid_node import BaseShotGridNode
+from flow_node_errors import required_input_error
 from flow_utils import create_shotgrid_api
 from griptape_nodes.exe_types.core_types import Parameter, ParameterMode
 from griptape_nodes.exe_types.node_types import AsyncResult
@@ -462,19 +463,13 @@ class FlowCreateAsset(BaseShotGridNode):
             logger.info(f"{self.name}: Creating asset with type: '{asset_type}'")
 
             if not project_id:
-                self._set_status_results(was_successful=False, result_details="project_id is required")
-                logger.error(f"{self.name}: project_id is required")
-                return
+                raise required_input_error("project_id")
 
             if not asset_code:
-                self._set_status_results(was_successful=False, result_details="asset_code is required")
-                logger.error(f"{self.name}: asset_code is required")
-                return
+                raise required_input_error("asset_code")
 
             if not asset_type:
-                self._set_status_results(was_successful=False, result_details="asset_type is required")
-                logger.error(f"{self.name}: asset_type is required")
-                return
+                raise required_input_error("asset_type")
 
             # Get access token
             access_token = self._get_access_token()
@@ -674,8 +669,7 @@ class FlowCreateAsset(BaseShotGridNode):
             self._set_status_results(was_successful=True, result_details=f"Successfully created asset {asset_id}")
 
         except Exception as e:
-            self._set_status_results(was_successful=False, result_details=str(e))
-            self._handle_failure_exception(e)
+            self._fail(e)
 
     def _update_asset_url(self, asset_id: int) -> None:
         """Update the asset_url output parameter with the ShotGrid URL."""

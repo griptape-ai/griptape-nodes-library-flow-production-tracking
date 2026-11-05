@@ -2,7 +2,8 @@ from typing import Any
 
 import httpx
 from base_shotgrid_node import BaseShotGridNode
-from griptape_nodes.exe_types.core_types import Parameter, ParameterMode
+from flow_node_errors import required_input_error
+from griptape_nodes.exe_types.core_types import NodeError, Parameter, ParameterMode
 from griptape_nodes.exe_types.node_types import AsyncResult
 from griptape_nodes.exe_types.param_types.parameter_string import ParameterString
 from griptape_nodes.retained_mode.events.parameter_events import (
@@ -155,8 +156,7 @@ class FlowGetProjectInfo(BaseShotGridNode):
         project_id = self.get_parameter_value("project_id")
 
         if not project_id:
-            self._set_status_results(was_successful=False, result_details="Project ID is required")
-            logger.error(f"{self.name}: Project ID is required")
+            self._fail(required_input_error("project_id"))
             return
 
         try:
@@ -177,9 +177,10 @@ class FlowGetProjectInfo(BaseShotGridNode):
                 project_data = data.get("data", {})
 
                 if not project_data:
-                    self._set_status_results(was_successful=False, result_details="No project data returned")
-                    logger.error(f"{self.name}: No project data returned")
-                    return
+                    raise NodeError(
+                        f"Autodesk Flow returned no data for project {project_id}. Check the project ID.",
+                        fields={"parameter": "project_id"},
+                    )
 
                 # Extract attributes
                 attributes = project_data.get("attributes", {})
@@ -202,5 +203,4 @@ class FlowGetProjectInfo(BaseShotGridNode):
                 )
 
         except Exception as e:
-            self._set_status_results(was_successful=False, result_details=str(e))
-            self._handle_failure_exception(e)
+            self._fail(e)

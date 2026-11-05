@@ -562,6 +562,5 @@ class FlowListProjects(BaseShotGridNode):
             )
 
         except Exception as e:
-            self._set_status_results(was_successful=False, result_details=str(e))
             self._update_option_choices("project", ["Error loading projects"], "Error loading projects")
-            self._handle_failure_exception(e)
+            self._fail(e)

@@ -2,6 +2,7 @@ from typing import Any
 
 import httpx
 from base_shotgrid_node import BaseShotGridNode
+from flow_node_errors import integer_input_error, required_input_error
 from griptape_nodes.exe_types.core_types import (
     NodeMessageResult,
     Parameter,
@@ -339,15 +340,13 @@ class FlowListAssets(BaseShotGridNode):
         asset_type = self.get_parameter_value("asset_type")
 
         if not project_id:
-            msg = "project_id is required"
-            raise ValueError(msg)
+            raise required_input_error("project_id")
 
         # Convert project_id to integer if it's a string
         try:
             project_id = int(project_id)
         except (ValueError, TypeError) as e:
-            msg = "project_id must be a valid integer"
-            raise ValueError(msg) from e
+            raise integer_input_error("project_id", project_id) from e
 
         # Get access token
         access_token = self._get_access_token()
@@ -451,10 +450,8 @@ class FlowListAssets(BaseShotGridNode):
             # Get input parameters
             project_id = self.get_parameter_value("project_id")
             if not project_id:
-                self._set_status_results(was_successful=False, result_details="project_id is required")
-                logger.warning(f"{self.name}: project_id is required")
                 self._update_option_choices("selected_asset", ["No project selected"], "No project selected")
-                return
+                raise required_input_error("project_id")
 
             # Load assets from ShotGrid
             logger.info(f"{self.name}: Loading assets from ShotGrid for project {project_id}...")
@@ -509,6 +506,7 @@ class FlowListAssets(BaseShotGridNode):
             )
 
         except Exception as e:
-            self._set_status_results(was_successful=False, result_details=str(e))
-            self._update_option_choices("selected_asset", ["Error loading assets"], "Error loading assets")
-            self._handle_failure_exception(e)
+            # An input error keeps the placeholder set where it was found.
+            if "parameter" not in getattr(e, "fields", {}):
+                self._update_option_choices("selected_asset", ["Error loading assets"], "Error loading assets")
+            self._fail(e)

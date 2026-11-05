@@ -2,7 +2,8 @@ from typing import Any
 
 import httpx
 from base_shotgrid_node import BaseShotGridNode
-from griptape_nodes.exe_types.core_types import Parameter, ParameterMode
+from flow_node_errors import required_input_error
+from griptape_nodes.exe_types.core_types import NodeError, Parameter, ParameterMode
 from griptape_nodes.exe_types.node_types import AsyncResult
 from griptape_nodes.exe_types.param_types.parameter_string import ParameterString
 from griptape_nodes.retained_mode.events.parameter_events import (
@@ -330,8 +331,7 @@ class FlowUpdateEntity(BaseShotGridNode):
         entity_id = self.get_parameter_value("entity_id")
 
         if not entity_id:
-            self._set_status_results(was_successful=False, result_details="Entity ID is required")
-            logger.error(f"{self.name}: Entity ID is required")
+            self._fail(required_input_error("entity_id"))
             return
 
         # Auto-detect entity type if "Unknown" is selected
@@ -339,11 +339,13 @@ class FlowUpdateEntity(BaseShotGridNode):
             logger.info(f"{self.name}: Entity type is 'Unknown', attempting auto-detection...")
             entity_type = self._detect_entity_type(entity_id)
             if not entity_type:
-                self._set_status_results(
-                    was_successful=False,
-                    result_details=f"Could not auto-detect entity type for ID {entity_id}",
+                self._fail(
+                    NodeError(
+                        f"Could not work out the entity type for ID {entity_id}. "
+                        "Choose a type in 'Entity Type' instead of 'Unknown'.",
+                        fields={"parameter": "entity_type"},
+                    )
                 )
-                logger.error(f"{self.name}: Could not auto-detect entity type for ID {entity_id}")
                 return
 
             # Update the entity_type parameter with the detected value
@@ -369,10 +371,7 @@ class FlowUpdateEntity(BaseShotGridNode):
                 logger.info(f"{self.name}: Will update '{param_name}' to '{param_value}'")
 
         if not update_data:
-            self._set_status_results(
-                was_successful=False, result_details="No fields to update (all dynamic parameters are None)"
-            )
-            logger.error(f"{self.name}: No fields to update (all dynamic parameters are None)")
+            self._fail(NodeError("There is nothing to update. Set a value on at least one of the entity's fields."))
             return
 
         try:
@@ -418,9 +417,10 @@ class FlowUpdateEntity(BaseShotGridNode):
                 updated_entity = data.get("data", {})
 
                 if not updated_entity:
-                    self._set_status_results(was_successful=False, result_details="No entity data returned from update")
-                    logger.error(f"{self.name}: No entity data returned from update")
-                    return
+                    raise NodeError(
+                        f"Autodesk Flow returned no data after updating {entity_type} {entity_id}. Check the entity in Flow before running the node again.",
+                        fields={"parameter": "entity_id"},
+                    )
 
                 # Update output parameters
                 GriptapeNodes.handle_request(
@@ -440,10 +440,8 @@ class FlowUpdateEntity(BaseShotGridNode):
                 )
 
         except httpx.HTTPStatusError as e:
-            self._set_status_results(was_successful=False, result_details=str(e))
             logger.error(f"{self.name}: HTTP error updating entity: {e.response.status_code} - {e.response.text}")
-            self._handle_failure_exception(e)
+            self._fail(e)
         except Exception as e:
-            self._set_status_results(was_successful=False, result_details=str(e))
             logger.error(f"{self.name}: Error updating entity: {e}")
-            self._handle_failure_exception(e)
+            self._fail(e)

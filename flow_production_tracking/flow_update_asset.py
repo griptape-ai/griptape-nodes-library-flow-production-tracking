@@ -2,7 +2,8 @@ from typing import Any
 
 import httpx
 from base_shotgrid_node import BaseShotGridNode
-from griptape_nodes.exe_types.core_types import Parameter, ParameterMode
+from flow_node_errors import integer_input_error, required_input_error
+from griptape_nodes.exe_types.core_types import NodeError, Parameter, ParameterMode
 from griptape_nodes.exe_types.node_types import AsyncResult
 from griptape_nodes.retained_mode.griptape_nodes import logger
 
@@ -137,17 +138,13 @@ class FlowUpdateAsset(BaseShotGridNode):
             thumbnail_image = self.get_parameter_value("thumbnail_image")
 
             if not asset_id:
-                self._set_status_results(was_successful=False, result_details="asset_id is required")
-                logger.error(f"{self.name}: asset_id is required")
-                return
+                raise required_input_error("asset_id")
 
             # Convert asset_id to integer if it's a string
             try:
                 asset_id = int(asset_id)
-            except (ValueError, TypeError):
-                self._set_status_results(was_successful=False, result_details="asset_id must be a valid integer")
-                logger.error(f"{self.name}: asset_id must be a valid integer")
-                return
+            except (ValueError, TypeError) as e:
+                raise integer_input_error("asset_id", asset_id) from e
 
             # Get access token and base URL
             access_token = self._get_access_token()
@@ -224,12 +221,7 @@ class FlowUpdateAsset(BaseShotGridNode):
 
             # Check if we have any updates (fields or thumbnail)
             if not has_updates and not thumbnail_image:
-                self._set_status_results(
-                    was_successful=False,
-                    result_details="At least one field to update or thumbnail must be provided",
-                )
-                logger.error(f"{self.name}: At least one field to update or thumbnail must be provided")
-                return
+                raise NodeError("There is nothing to update. Fill in at least one field or connect a thumbnail.")
 
             # Get final asset data
             try:
@@ -260,5 +252,4 @@ class FlowUpdateAsset(BaseShotGridNode):
             self._update_asset_url(asset_id)
 
         except Exception as e:
-            self._set_status_results(was_successful=False, result_details=str(e))
-            self._handle_failure_exception(e)
+            self._fail(e)

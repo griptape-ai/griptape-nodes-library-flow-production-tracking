@@ -2,7 +2,9 @@ from typing import Any
 
 import httpx
 from base_shotgrid_node import BaseShotGridNode
+from flow_node_errors import required_input_error
 from griptape_nodes.exe_types.core_types import (
+    NodeError,
     Parameter,
     ParameterMode,
 )
@@ -342,16 +344,12 @@ class FlowUpdateTask(BaseShotGridNode):
             # Get and validate task ID
             task_id = self.get_parameter_value("task_id")
             if not task_id:
-                self._set_status_results(was_successful=False, result_details="Task ID is required")
-                logger.error(f"{self.name}: Task ID is required")
-                return
+                raise required_input_error("task_id")
 
             # Prepare update data
             update_data = self._prepare_update_data()
             if not update_data:
-                self._set_status_results(was_successful=False, result_details="No fields to update")
-                logger.warning(f"{self.name}: No fields to update")
-                return
+                raise NodeError("There is nothing to update. Fill in at least one field.")
 
             # Make the update request
             access_token = self._get_access_token()
@@ -373,9 +371,10 @@ class FlowUpdateTask(BaseShotGridNode):
                 task_data = updated_data.get("data", {})
 
                 if not task_data:
-                    self._set_status_results(was_successful=False, result_details="No task data returned from update")
-                    logger.error(f"{self.name}: No task data returned from update")
-                    return
+                    raise NodeError(
+                        f"Autodesk Flow returned no data after updating task {task_id}. Check the task in Flow before running the node again.",
+                        fields={"parameter": "task_id"},
+                    )
 
                 # Extract and process task data
                 processed_data = self._extract_task_data(task_data)
@@ -389,5 +388,4 @@ class FlowUpdateTask(BaseShotGridNode):
                 self._set_status_results(was_successful=True, result_details=f"Successfully updated task {task_id}")
 
         except Exception as e:
-            self._set_status_results(was_successful=False, result_details=str(e))
-            self._handle_failure_exception(e)
+            self._fail(e)
