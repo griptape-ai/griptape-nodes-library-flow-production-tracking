@@ -178,3 +178,86 @@ def test_node_files_load_the_way_the_engine_loads_them(monkeypatch: pytest.Monke
         monkeypatch.setitem(sys.modules, module_name, module)
         spec.loader.exec_module(module)
         assert hasattr(module, node["class_name"])
+
+
+UNREADABLE_BODIES = {
+    "html": httpx.Response(200, text="<html><body>Bad gateway</body></html>", headers={"content-type": "text/html"}),
+    "empty": httpx.Response(200, content=b""),
+    "list": httpx.Response(200, json=[{"id": 1}]),
+}
+
+
+@pytest.fixture
+def flow_api(secrets, monkeypatch: pytest.MonkeyPatch):
+    """Answer the token request, then every other request with the body the test sets."""
+    secrets.update({"SHOTGRID_API_KEY": "k", "SHOTGRID_URL": "https://studio.shotgrid.autodesk.com"})
+    state: dict[str, httpx.Response] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("access_token"):
+            return httpx.Response(200, json={"access_token": "t", "expires_in": 3600})
+        return state["body"]
+
+    real_client = httpx.Client
+
+    class MockClient(real_client):
+        def __init__(self, *args, **kwargs):
+            kwargs["transport"] = httpx.MockTransport(handler)
+            super().__init__(*args, **kwargs)
+
+    monkeypatch.setattr(httpx, "Client", MockClient)
+    monkeypatch.setattr(httpx, "post", lambda url, **kwargs: MockClient().post(url, **kwargs))
+    return state
+
+
+@pytest.mark.parametrize("body", list(UNREADABLE_BODIES))
+@pytest.mark.parametrize("node_name", ["flow_get_project.FlowGetProject", "flow_list_projects.FlowListProjects"])
+def test_unreadable_body_follows_failed_when_wired(flow_api, node_name: str, body: str):
+    module_name, class_name = node_name.split(".")
+    node = getattr(importlib.import_module(module_name), class_name)(name="node")
+    node.set_parameter_value("project_id", "1")
+    node._has_outgoing_connections = lambda _param: True  # type: ignore[method-assign]
+    flow_api["body"] = UNREADABLE_BODIES[body]
+
+    node._do_process()
+
+    assert node.parameter_output_values["was_successful"] is False
+    assert node.parameter_output_values["result_details"]
+
+
+@pytest.mark.parametrize("body", list(UNREADABLE_BODIES))
+@pytest.mark.parametrize("node_name", ["flow_get_project.FlowGetProject", "flow_list_projects.FlowListProjects"])
+def test_unreadable_body_raises_when_failed_is_unwired(flow_api, node_name: str, body: str):
+    module_name, class_name = node_name.split(".")
+    node = getattr(importlib.import_module(module_name), class_name)(name="node")
+    node.set_parameter_value("project_id", "1")
+    node._has_outgoing_connections = lambda _param: False  # type: ignore[method-assign]
+    flow_api["body"] = UNREADABLE_BODIES[body]
+
+    with pytest.raises(Exception) as caught:  # noqa: PT011
+        node._do_process()
+
+    assert node.parameter_output_values["was_successful"] is False
+    if body != "list":
+        assert isinstance(caught.value, NodeError)
+        assert "not JSON" in str(caught.value)
+
+
+def test_html_at_sign_in_follows_failed(secrets, monkeypatch: pytest.MonkeyPatch):
+    import httpx as httpx_module
+    from flow_get_project import FlowGetProject
+
+    secrets.update({"SHOTGRID_API_KEY": "k", "SHOTGRID_URL": "https://studio.shotgrid.autodesk.com"})
+    monkeypatch.setattr(
+        httpx_module,
+        "post",
+        lambda url, **_k: httpx_module.Response(200, text="<html></html>", request=httpx_module.Request("POST", url)),
+    )
+    node = FlowGetProject(name="node")
+    node.set_parameter_value("project_id", "1")
+    node._has_outgoing_connections = lambda _param: True  # type: ignore[method-assign]
+
+    node._do_process()
+
+    assert node.parameter_output_values["was_successful"] is False
+    assert "not JSON" in node.parameter_output_values["result_details"]

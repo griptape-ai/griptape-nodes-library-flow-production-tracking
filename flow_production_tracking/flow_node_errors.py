@@ -5,6 +5,8 @@ A missing secret and a failed HTTP call come from `NodeError.from_missing_secret
 loads each node file on its own with this folder on `sys.path`.
 """
 
+import json
+
 import httpx
 from griptape_nodes.exe_types.core_types import NodeError, NodeErrorLink
 
@@ -62,7 +64,11 @@ def sign_in_error(exc: httpx.HTTPStatusError) -> NodeError:
 
 
 def to_node_error(exc: Exception) -> Exception:
-    """A NodeError for an httpx failure, and any other exception unchanged."""
+    """A NodeError for an httpx failure or an unreadable body, and any other exception unchanged."""
+    if isinstance(exc, json.JSONDecodeError):
+        return NodeError(
+            f"{PROVIDER} answered with something that is not JSON (an empty or web page response). Run the node again."
+        )
     if not isinstance(exc, httpx.HTTPError):
         return exc
     # A 403 means the script lacks a permission, not that the key was refused.
