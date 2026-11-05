@@ -55,7 +55,7 @@ def test_http_error_carries_reason_status_and_response():
     assert "Project 99 does not exist" in str(error)
     assert error.fields == {"status_code": 404, "error_code": 104, "request_id": "req-1"}
     assert error.response == body
-    assert "studio.shotgrid" not in str(error)
+    assert "https:" not in str(error)
     assert "mozilla" not in str(error)
 
 
@@ -90,7 +90,7 @@ def test_connection_failure_links_to_the_url_setting():
 
     error = to_node_error(caught.value)
     assert isinstance(error, NodeError)
-    assert "nowhere.example.com" in str(error)
+    assert str(error).startswith("Could not connect to Autodesk Flow at nowhere.example.com.")
     assert error.links[0].url == "#settings-secrets?filter=SHOTGRID_URL"
 
 
