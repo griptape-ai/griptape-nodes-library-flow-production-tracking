@@ -4,9 +4,8 @@ from pathlib import Path
 
 import httpx
 from flow_node_errors import (
-    error_from_auth_failure,
-    missing_api_key_error,
-    missing_url_error,
+    missing_credential_errors,
+    sign_in_error,
     to_node_error,
 )
 from griptape_nodes.common.project_templates.situation import BuiltInSituation
@@ -47,12 +46,14 @@ class BaseShotGridNode(SuccessFailureNode):
 
     def _missing_credential_errors(self) -> list[Exception]:
         secrets = GriptapeNodes.SecretsManager()
-        errors: list[Exception] = []
-        if not secrets.get_secret(self.API_KEY_ENV_VAR, should_error_on_not_found=False):
-            errors.append(missing_api_key_error())
-        if not secrets.get_secret(self.SHOTGRID_URL_ENV_VAR, should_error_on_not_found=False):
-            errors.append(missing_url_error())
-        return errors
+        return missing_credential_errors(
+            {
+                self.API_KEY_ENV_VAR: secrets.get_secret(self.API_KEY_ENV_VAR, should_error_on_not_found=False),
+                self.SHOTGRID_URL_ENV_VAR: secrets.get_secret(
+                    self.SHOTGRID_URL_ENV_VAR, should_error_on_not_found=False
+                ),
+            }
+        )
 
     def _fail(self, exc: Exception) -> None:
         """Record a failure on the status outputs, then follow Failed if wired or raise."""
@@ -75,9 +76,6 @@ class BaseShotGridNode(SuccessFailureNode):
         config = self._get_shotgrid_config()
         api_key = config["api_key"]
         base_url = config["base_url"]
-
-        if not api_key:
-            raise missing_api_key_error()
 
         # Get script name from config
         script_name = GriptapeNodes.SecretsManager().get_secret(self.SCRIPT_NAME_ENV_VAR) or "Griptape Nodes"
@@ -112,8 +110,8 @@ class BaseShotGridNode(SuccessFailureNode):
         except httpx.HTTPStatusError as e:
             logger.error(f"Failed to get access token: {e}")
             if e.response.status_code in (400, 401, 403):
-                raise error_from_auth_failure(e) from e
-            raise to_node_error(e) from e
+                raise sign_in_error(e) from e
+            raise
         except Exception as e:
             logger.error(f"Failed to get access token: {e}")
             raise
@@ -355,8 +353,8 @@ class BaseShotGridNode(SuccessFailureNode):
         base_url = GriptapeNodes.SecretsManager().get_secret(self.SHOTGRID_URL_ENV_VAR, should_error_on_not_found=False)
         script_name = GriptapeNodes.SecretsManager().get_secret(self.SCRIPT_NAME_ENV_VAR) or "Griptape Nodes"
 
-        if not base_url:
-            raise missing_url_error()
+        if missing := self._missing_credential_errors():
+            raise missing[0]
 
         if not base_url.endswith("/"):
             base_url += "/"

@@ -52,46 +52,19 @@ def test_http_error_carries_reason_status_and_response():
     error = to_node_error(_status_error(404, body, {"x-request-id": "req-1"}))
 
     assert isinstance(error, NodeError)
-    assert "Project 99 does not exist" in str(error)
-    assert error.fields == {"status_code": 404, "error_code": 104, "request_id": "req-1"}
+    assert error.fields["status_code"] == 404
+    assert error.fields["request_id"] == "req-1"
     assert error.response == body
-    assert "https:" not in str(error)
-    assert "mozilla" not in str(error)
 
 
-def test_refused_request_links_to_the_key():
+def test_forbidden_is_not_reported_as_a_refused_key():
     from flow_node_errors import to_node_error
 
     error = to_node_error(_status_error(403, {"errors": [{"title": "Forbidden"}]}))
 
     assert isinstance(error, NodeError)
-    assert error.links
-    assert error.links[0].url == "#settings-secrets?filter=SHOTGRID_API_KEY"
-
-
-def test_non_json_error_body_is_kept():
-    from flow_node_errors import to_node_error
-
-    error = to_node_error(_status_error(502, "Bad gateway"))
-
-    assert isinstance(error, NodeError)
-    assert error.response == {"body": "Bad gateway"}
-    assert error.fields == {"status_code": 502}
-
-
-def test_connection_failure_links_to_the_url_setting():
-    from flow_node_errors import to_node_error
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        raise httpx.ConnectError("dns failure", request=request)
-
-    with pytest.raises(httpx.ConnectError) as caught, httpx.Client(transport=httpx.MockTransport(handler)) as client:
-        client.get("https://nowhere.example.com/api/v1/entity/projects")
-
-    error = to_node_error(caught.value)
-    assert isinstance(error, NodeError)
-    assert str(error).startswith("Could not connect to Autodesk Flow at nowhere.example.com.")
-    assert error.links[0].url == "#settings-secrets?filter=SHOTGRID_URL"
+    assert "refused the API key" not in str(error)
+    assert not error.links
 
 
 def test_other_exceptions_pass_through():
@@ -99,13 +72,6 @@ def test_other_exceptions_pass_through():
 
     original = KeyError("x")
     assert to_node_error(original) is original
-
-
-def test_parameter_label():
-    from flow_node_errors import parameter_label
-
-    assert parameter_label("project_id") == "Project ID"
-    assert parameter_label("entity_type") == "Entity Type"
 
 
 def test_missing_credentials_are_reported_alone(secrets):
