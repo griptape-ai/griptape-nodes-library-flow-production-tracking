@@ -453,5 +453,7 @@ class FlowListEpisodes(BaseShotGridNode):
             )
 
         except Exception as e:
-            self._update_option_choices("selected_episode", ["Error loading episodes"], "Error loading episodes")
+            # An input error keeps the placeholder set where it was found.
+            if "parameter" not in getattr(e, "fields", {}):
+                self._update_option_choices("selected_episode", ["Error loading episodes"], "Error loading episodes")
             self._fail(e)

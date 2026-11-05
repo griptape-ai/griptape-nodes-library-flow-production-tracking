@@ -7,6 +7,7 @@ import httpx
 import pytest
 from griptape_nodes.exe_types.core_types import NodeError
 from griptape_nodes.retained_mode.griptape_nodes import GriptapeNodes
+from griptape_nodes.traits.options import Options
 
 LIBRARY_DIR = Path(__file__).resolve().parents[2] / "flow_production_tracking"
 MANIFEST = LIBRARY_DIR / "griptape_nodes_library.json"
@@ -261,3 +262,41 @@ def test_html_at_sign_in_follows_failed(secrets, monkeypatch: pytest.MonkeyPatch
 
     assert node.parameter_output_values["was_successful"] is False
     assert "not JSON" in node.parameter_output_values["result_details"]
+
+
+def test_missing_url_link_is_labelled_for_the_url(secrets):
+    from flow_get_project import FlowGetProject
+
+    secrets["SHOTGRID_API_KEY"] = "k"
+    errors = FlowGetProject(name="node").validate_before_node_run()
+
+    assert errors is not None
+    assert [link.label for link in errors[0].links] == ["Add the site URL"]
+
+
+@pytest.mark.parametrize("wired", [True, False])
+@pytest.mark.parametrize(
+    ("node_name", "parameter", "placeholder"),
+    [
+        ("flow_list_assets.FlowListAssets", "selected_asset", "No project selected"),
+        ("flow_list_episodes.FlowListEpisodes", "selected_episode", "No project selected"),
+        ("flow_list_sequences.FlowListSequences", "selected_sequence", "No project selected"),
+        ("flow_list_shots.FlowListShots", "selected_shot", "No project selected"),
+        ("flow_list_tasks.FlowListTasks", "selected_task", "No entity selected"),
+    ],
+)
+def test_list_node_keeps_its_placeholder_when_an_input_is_missing(secrets, node_name, parameter, placeholder, wired):
+    secrets.update({"SHOTGRID_API_KEY": "k", "SHOTGRID_URL": "https://studio.shotgrid.autodesk.com"})
+    module_name, class_name = node_name.split(".")
+    node = getattr(importlib.import_module(module_name), class_name)(name="node")
+    node._has_outgoing_connections = lambda _param: wired  # type: ignore[method-assign]
+
+    if wired:
+        node._do_process()
+        assert node.parameter_output_values["was_successful"] is False
+    else:
+        with pytest.raises(NodeError, match="is required"):
+            node._do_process()
+
+    assert node.get_parameter_value(parameter) == placeholder
+    assert node.get_parameter_by_name(parameter).find_elements_by_type(Options)[0].choices == [placeholder]

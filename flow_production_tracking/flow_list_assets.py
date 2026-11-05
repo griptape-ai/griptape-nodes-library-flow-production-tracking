@@ -506,5 +506,7 @@ class FlowListAssets(BaseShotGridNode):
             )
 
         except Exception as e:
-            self._update_option_choices("selected_asset", ["Error loading assets"], "Error loading assets")
+            # An input error keeps the placeholder set where it was found.
+            if "parameter" not in getattr(e, "fields", {}):
+                self._update_option_choices("selected_asset", ["Error loading assets"], "Error loading assets")
             self._fail(e)

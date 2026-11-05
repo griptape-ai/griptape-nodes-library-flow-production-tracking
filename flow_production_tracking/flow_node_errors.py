@@ -39,9 +39,16 @@ def integer_input_error(parameter_name: str, value: object) -> NodeError:
 def missing_credential_errors(secrets: dict[str, str | None]) -> list[Exception]:
     """One error per unset secret in `secrets` (name to value)."""
     key_urls = {API_KEY_NAME: SCRIPT_DOCS_URL}
-    return [
-        NodeError.from_missing_secret(name, key_url=key_urls.get(name)) for name, value in secrets.items() if not value
-    ]
+    link_labels = {URL_NAME: "Add the site URL", SCRIPT_NAME_NAME: "Add the script name"}
+    errors: list[Exception] = []
+    for name, value in secrets.items():
+        if value:
+            continue
+        error = NodeError.from_missing_secret(name, key_url=key_urls.get(name))
+        if name in link_labels:
+            error.links[0] = NodeErrorLink.from_secret(name, link_labels[name])
+        errors.append(error)
+    return errors
 
 
 def _with_flow_reason(error: NodeError, response: httpx.Response) -> NodeError:

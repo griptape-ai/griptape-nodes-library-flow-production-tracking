@@ -637,5 +637,7 @@ class FlowListTasks(BaseShotGridNode):
             self._set_status_results(was_successful=True, result_details=f"Successfully loaded {len(task_list)} tasks")
 
         except Exception as e:
-            self._update_option_choices("selected_task", ["Error loading tasks"], "Error loading tasks")
+            # An input error keeps the placeholder set where it was found.
+            if "parameter" not in getattr(e, "fields", {}):
+                self._update_option_choices("selected_task", ["Error loading tasks"], "Error loading tasks")
             self._fail(e)

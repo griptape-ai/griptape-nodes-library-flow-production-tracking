@@ -455,5 +455,7 @@ class FlowListShots(BaseShotGridNode):
             self._set_status_results(was_successful=True, result_details=f"Successfully loaded {len(shot_list)} shots")
 
         except Exception as e:
-            self._update_option_choices("selected_shot", ["Error loading shots"], "Error loading shots")
+            # An input error keeps the placeholder set where it was found.
+            if "parameter" not in getattr(e, "fields", {}):
+                self._update_option_choices("selected_shot", ["Error loading shots"], "Error loading shots")
             self._fail(e)

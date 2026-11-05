@@ -440,5 +440,7 @@ class FlowListSequences(BaseShotGridNode):
             )
 
         except Exception as e:
-            self._update_option_choices("selected_sequence", ["Error loading sequences"], "Error loading sequences")
+            # An input error keeps the placeholder set where it was found.
+            if "parameter" not in getattr(e, "fields", {}):
+                self._update_option_choices("selected_sequence", ["Error loading sequences"], "Error loading sequences")
             self._fail(e)
